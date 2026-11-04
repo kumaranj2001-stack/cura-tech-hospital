@@ -11,6 +11,7 @@ import {
 } from "firebase/firestore";
 import { db } from "../firebase";
 import { flashToast } from "../utils/helpers";
+import { setActiveUserRole } from "../utils/apiInterceptor";
 import type {
   AppData,
   Appointment,
@@ -725,6 +726,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   });
   const actingRoleRef = useRef(currentUser?.role);
   actingRoleRef.current = currentUser?.role;
+
+  useEffect(() => {
+    setActiveUserRole(currentUser?.role);
+  }, [currentUser?.role]);
   const [currentBranch, setCurrentBranch] = useState<Branch | null>(() => {
     try {
       const raw = sessionStorage.getItem(BRANCH_SESSION_KEY);

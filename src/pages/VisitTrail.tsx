@@ -2,6 +2,7 @@ import React, { useState, useMemo } from "react";
 import { useStore } from "../store/store";
 import { Card, CardHeader, CardBody, Button, Input, Label, Select, Badge } from "../components/ui";
 import { fmtDate, fmtDateTime, fmtCurrency, flashToast } from "../utils/helpers";
+import { canViewFinancials } from "../utils/permissions";
 import type { Patient, Appointment, Consultation, PatientVitals, LabOrder, Invoice, CarePlan } from "../store/types";
 import {
   FileText,
@@ -144,10 +145,17 @@ export const VisitTrail: React.FC<{
                 <span className="text-[10px] text-slate-400 uppercase block">Digital Identifier</span>
                 <span className="font-mono font-bold text-sky-600 dark:text-sky-400 text-sm">{activePatient.uhid}</span>
               </div>
-              <div className="text-right">
-                <span className="text-[10px] text-slate-400 uppercase block">Total Visits Billed</span>
-                <span className="font-bold text-slate-800 dark:text-slate-100 text-sm">{fmtCurrency(totalFinancials.totalBilled)}</span>
-              </div>
+              {canViewFinancials(currentUser?.role) ? (
+                <div className="text-right">
+                  <span className="text-[10px] text-slate-400 uppercase block">Total Visits Billed</span>
+                  <span className="font-bold text-slate-800 dark:text-slate-100 text-sm">{fmtCurrency(totalFinancials.totalBilled)}</span>
+                </div>
+              ) : (
+                <div className="text-right">
+                  <span className="text-[10px] text-slate-400 uppercase block">Clinical Records</span>
+                  <span className="font-bold text-slate-800 dark:text-slate-100 text-sm">{patientConsultations.length} Consultations</span>
+                </div>
+              )}
             </div>
           )}
         </CardBody>
@@ -419,59 +427,61 @@ export const VisitTrail: React.FC<{
             </Card>
           </div>
 
-          {/* ── STEP 6: INTEGRATED DIGITAL BILLING & SETTLEMENT ── */}
-          <div className="relative pl-8 sm:pl-10">
-            <div className="absolute left-0 top-1 w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-amber-600 text-white flex items-center justify-center font-bold text-xs shadow-md">
-              6
-            </div>
+          {/* ── STEP 6: INTEGRATED DIGITAL BILLING & SETTLEMENT (FINANCIAL MODULE - OMITTED FOR CLINICIANS & NURSES) ── */}
+          {canViewFinancials(currentUser?.role) && (
+            <div className="relative pl-8 sm:pl-10">
+              <div className="absolute left-0 top-1 w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-amber-600 text-white flex items-center justify-center font-bold text-xs shadow-md">
+                6
+              </div>
 
-            <Card className="border-amber-100 dark:border-amber-900">
-              <CardHeader className="py-2.5 px-4 bg-amber-50/60 dark:bg-amber-950/40 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Receipt className="w-4 h-4 text-amber-600" />
-                  <span className="text-xs font-bold uppercase tracking-wider text-amber-900 dark:text-amber-200">
-                    Unified Hospital Billing: Consultation + Lab + Pharmacy Settlement
+              <Card className="border-amber-100 dark:border-amber-900">
+                <CardHeader className="py-2.5 px-4 bg-amber-50/60 dark:bg-amber-950/40 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Receipt className="w-4 h-4 text-amber-600" />
+                    <span className="text-xs font-bold uppercase tracking-wider text-amber-900 dark:text-amber-200">
+                      Unified Hospital Billing: Consultation + Lab + Pharmacy Settlement
+                    </span>
+                  </div>
+                  <span className="font-bold text-amber-800 font-mono text-sm">
+                    {fmtCurrency(totalFinancials.totalBilled)}
                   </span>
-                </div>
-                <span className="font-bold text-amber-800 font-mono text-sm">
-                  {fmtCurrency(totalFinancials.totalBilled)}
-                </span>
-              </CardHeader>
-              <CardBody className="p-4 text-xs space-y-3">
-                {patientInvoices.length > 0 ? (
-                  <div className="space-y-2">
-                    {patientInvoices.map((inv) => (
-                      <div key={inv.id} className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 flex items-center justify-between">
-                        <div>
-                          <div className="font-bold text-slate-800 dark:text-slate-100 text-sm">
-                            Invoice #{inv.number}
+                </CardHeader>
+                <CardBody className="p-4 text-xs space-y-3">
+                  {patientInvoices.length > 0 ? (
+                    <div className="space-y-2">
+                      {patientInvoices.map((inv) => (
+                        <div key={inv.id} className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 flex items-center justify-between">
+                          <div>
+                            <div className="font-bold text-slate-800 dark:text-slate-100 text-sm">
+                              Invoice #{inv.number}
+                            </div>
+                            <div className="text-[11px] text-slate-400">
+                              {fmtDateTime(inv.date)} · Mode: <b>{inv.paymentMethod?.toUpperCase() || "CASH"}</b>
+                            </div>
                           </div>
-                          <div className="text-[11px] text-slate-400">
-                            {fmtDateTime(inv.date)} · Mode: <b>{inv.paymentMethod?.toUpperCase() || "CASH"}</b>
+                          <div className="text-right">
+                            <div className="font-mono font-bold text-slate-900 dark:text-slate-100 text-sm">
+                              {fmtCurrency(inv.total)}
+                            </div>
+                            <span className="text-[10px] text-emerald-600 font-semibold">PAID & SETTLED</span>
                           </div>
                         </div>
-                        <div className="text-right">
-                          <div className="font-mono font-bold text-slate-900 dark:text-slate-100 text-sm">
-                            {fmtCurrency(inv.total)}
-                          </div>
-                          <span className="text-[10px] text-emerald-600 font-semibold">PAID & SETTLED</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-6 text-slate-400 space-y-2">
-                    <p>No billing invoices settled yet for this patient.</p>
-                    {onNavigateToBilling && (
-                      <Button size="sm" onClick={() => onNavigateToBilling(activePatient.id)}>
-                        Create Unified Hospital Bill
-                      </Button>
-                    )}
-                  </div>
-                )}
-              </CardBody>
-            </Card>
-          </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-6 text-slate-400 space-y-2">
+                      <p>No billing invoices settled yet for this patient.</p>
+                      {onNavigateToBilling && (
+                        <Button size="sm" onClick={() => onNavigateToBilling(activePatient.id)}>
+                          Create Unified Hospital Bill
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                </CardBody>
+              </Card>
+            </div>
+          )}
         </div>
       ) : (
         <div className="text-center py-24 text-slate-400">

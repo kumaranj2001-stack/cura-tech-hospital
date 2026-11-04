@@ -8,6 +8,7 @@ import { listDoctors, createDoctor, updateDoctor, deleteDoctor } from "./doctorH
 import { listUsers, createUser, updateUser, deleteUser, validateUserPayload, sanitizeUserOutput } from "./userHandler.mjs";
 import { db, COLLECTIONS, firebaseConfig } from "./firebase.mjs";
 import { collection, doc, getDoc, getDocs, setDoc, deleteDoc } from "firebase/firestore";
+import { enforceRbac } from "./rbac.mjs";
 
 const PORT = process.env.PORT || 3001;
 
@@ -33,6 +34,11 @@ const server = http.createServer(async (req, res) => {
   if (req.method === "OPTIONS") {
     res.writeHead(204);
     res.end();
+    return;
+  }
+
+  // Enforce Hospital Role-Based Access Control (RBAC) across all API endpoints
+  if (!enforceRbac(req, res)) {
     return;
   }
 

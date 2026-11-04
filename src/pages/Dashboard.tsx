@@ -15,6 +15,7 @@ import {
 } from "recharts";
 import type { PageId } from "../components/Layout";
 import { minStockOf } from "../store/types";
+import { canViewFinancials, canManageInventory, canAccessPage } from "../utils/permissions";
 
 /* Animated number for living KPI cards */
 function useCountUp(target: number, ms = 700) {
@@ -78,7 +79,7 @@ const Dashboard: React.FC<{
   onOpenInvoice?: (id: string) => void;
   onOpenInventory?: (filter?: string) => void;
 }> = ({ setPage, onOpenInvoice, onOpenInventory }) => {
-  const { data, flags } = useStore();
+  const { data, flags, currentUser } = useStore();
   const [detail, setDetail] = useState<DetailKey | null>(null);
 
   const stats = useMemo(() => {
@@ -294,109 +295,137 @@ const Dashboard: React.FC<{
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
-          <button
-            onClick={() => setPage("reception")}
-            className="p-3 rounded-xl bg-white/10 hover:bg-white/20 transition-all border border-white/10 text-left flex flex-col justify-between"
-          >
-            <div className="text-xl mb-1">🏢</div>
-            <div className="text-xs font-bold text-white">Reception</div>
-            <div className="text-[10px] text-sky-300">UHID & Tokens</div>
-          </button>
+          {canAccessPage(currentUser?.role, "reception") && (
+            <button
+              onClick={() => setPage("reception")}
+              className="p-3 rounded-xl bg-white/10 hover:bg-white/20 transition-all border border-white/10 text-left flex flex-col justify-between"
+            >
+              <div className="text-xl mb-1">🏢</div>
+              <div className="text-xs font-bold text-white">Reception</div>
+              <div className="text-[10px] text-sky-300">UHID & Tokens</div>
+            </button>
+          )}
 
-          <button
-            onClick={() => setPage("doctorDashboard")}
-            className="p-3 rounded-xl bg-white/10 hover:bg-white/20 transition-all border border-white/10 text-left flex flex-col justify-between"
-          >
-            <div className="text-xl mb-1">🩺</div>
-            <div className="text-xs font-bold text-white">Doctor Station</div>
-            <div className="text-[10px] text-indigo-300">EHR & e-Prescription</div>
-          </button>
+          {canAccessPage(currentUser?.role, "doctorDashboard") && (
+            <button
+              onClick={() => setPage("doctorDashboard")}
+              className="p-3 rounded-xl bg-white/10 hover:bg-white/20 transition-all border border-white/10 text-left flex flex-col justify-between"
+            >
+              <div className="text-xl mb-1">🩺</div>
+              <div className="text-xs font-bold text-white">Doctor Station</div>
+              <div className="text-[10px] text-indigo-300">EHR & e-Prescription</div>
+            </button>
+          )}
 
-          <button
-            onClick={() => setPage("nursingStation")}
-            className="p-3 rounded-xl bg-white/10 hover:bg-white/20 transition-all border border-white/10 text-left flex flex-col justify-between"
-          >
-            <div className="text-xl mb-1">🏥</div>
-            <div className="text-xs font-bold text-white">Nursing Terminal</div>
-            <div className="text-[10px] text-teal-300">Vitals & Care Plans</div>
-          </button>
+          {canAccessPage(currentUser?.role, "nursingStation") && (
+            <button
+              onClick={() => setPage("nursingStation")}
+              className="p-3 rounded-xl bg-white/10 hover:bg-white/20 transition-all border border-white/10 text-left flex flex-col justify-between"
+            >
+              <div className="text-xl mb-1">🏥</div>
+              <div className="text-xs font-bold text-white">Nursing Terminal</div>
+              <div className="text-[10px] text-teal-300">Vitals & Care Plans</div>
+            </button>
+          )}
 
-          <button
-            onClick={() => setPage("diagnosticLab")}
-            className="p-3 rounded-xl bg-white/10 hover:bg-white/20 transition-all border border-white/10 text-left flex flex-col justify-between"
-          >
-            <div className="text-xl mb-1">🔬</div>
-            <div className="text-xs font-bold text-white">Diagnostic Lab</div>
-            <div className="text-[10px] text-violet-300">Tests & Reports</div>
-          </button>
+          {canAccessPage(currentUser?.role, "diagnosticLab") && (
+            <button
+              onClick={() => setPage("diagnosticLab")}
+              className="p-3 rounded-xl bg-white/10 hover:bg-white/20 transition-all border border-white/10 text-left flex flex-col justify-between"
+            >
+              <div className="text-xl mb-1">🔬</div>
+              <div className="text-xs font-bold text-white">Diagnostic Lab</div>
+              <div className="text-[10px] text-violet-300">Tests & Reports</div>
+            </button>
+          )}
 
-          <button
-            onClick={() => setPage("billing")}
-            className="p-3 rounded-xl bg-white/10 hover:bg-white/20 transition-all border border-white/10 text-left flex flex-col justify-between"
-          >
-            <div className="text-xl mb-1">🧾</div>
-            <div className="text-xs font-bold text-white">Hospital Billing</div>
-            <div className="text-[10px] text-emerald-300">e-Rx Dispensing</div>
-          </button>
+          {canAccessPage(currentUser?.role, "billing") && (
+            <button
+              onClick={() => setPage("billing")}
+              className="p-3 rounded-xl bg-white/10 hover:bg-white/20 transition-all border border-white/10 text-left flex flex-col justify-between"
+            >
+              <div className="text-xl mb-1">🧾</div>
+              <div className="text-xs font-bold text-white">Hospital Billing</div>
+              <div className="text-[10px] text-emerald-300">e-Rx Dispensing</div>
+            </button>
+          )}
 
-          <button
-            onClick={() => setPage("visitTrail")}
-            className="p-3 rounded-xl bg-white/10 hover:bg-white/20 transition-all border border-white/10 text-left flex flex-col justify-between"
-          >
-            <div className="text-xl mb-1">📋</div>
-            <div className="text-xs font-bold text-white">Visit Trail</div>
-            <div className="text-[10px] text-amber-300">360° Audit Journey</div>
-          </button>
+          {canAccessPage(currentUser?.role, "visitTrail") && (
+            <button
+              onClick={() => setPage("visitTrail")}
+              className="p-3 rounded-xl bg-white/10 hover:bg-white/20 transition-all border border-white/10 text-left flex flex-col justify-between"
+            >
+              <div className="text-xl mb-1">📋</div>
+              <div className="text-xs font-bold text-white">Visit Trail</div>
+              <div className="text-[10px] text-amber-300">360° Audit Journey</div>
+            </button>
+          )}
         </div>
       </div>
 
       {/* KPI grid */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-        <StatCard label="Today's Sales" amount={stats.todaySales} format="currency" icon="💰" chip="bg-emerald-50 text-emerald-600" ring="group-hover:ring-emerald-300" sub={`${stats.todays.length} invoices`} onClick={() => setDetail("today")} />
-        <StatCard label="Total Sales" amount={stats.totalSales} format="currency" icon="🧾" chip="bg-sky-50 text-sky-600" ring="group-hover:ring-sky-300" sub={`${data.invoices.length} invoices`} onClick={() => setDetail("totalSales")} />
-        <StatCard label="This Month" amount={stats.monthSales} format="currency" icon="📈" chip="bg-teal-50 text-teal-600" ring="group-hover:ring-teal-300" sub={`${stats.monthInvoices.length} invoices`} onClick={() => setDetail("month")} />
-        <StatCard label="Stock Value" amount={stats.totalStockValue} format="currency" icon="💊" chip="bg-violet-50 text-violet-600" ring="group-hover:ring-violet-300" sub={`${data.medicines.length} medicines`} onClick={() => setDetail("stockValue")} />
-        {flags.grnModule && (
-          <StatCard label="Pending GRNs" amount={pendingGRNs.length} icon="✅" chip="bg-amber-50 text-amber-600" ring="group-hover:ring-amber-300" sub="awaiting approval" alert onClick={() => setDetail("pending")} />
+        {canViewFinancials(currentUser?.role) ? (
+          <>
+            <StatCard label="Today's Sales" amount={stats.todaySales} format="currency" icon="💰" chip="bg-emerald-50 text-emerald-600" ring="group-hover:ring-emerald-300" sub={`${stats.todays.length} invoices`} onClick={() => setDetail("today")} />
+            <StatCard label="Total Sales" amount={stats.totalSales} format="currency" icon="🧾" chip="bg-sky-50 text-sky-600" ring="group-hover:ring-sky-300" sub={`${data.invoices.length} invoices`} onClick={() => setDetail("totalSales")} />
+            <StatCard label="This Month" amount={stats.monthSales} format="currency" icon="📈" chip="bg-teal-50 text-teal-600" ring="group-hover:ring-teal-300" sub={`${stats.monthInvoices.length} invoices`} onClick={() => setDetail("month")} />
+            <StatCard label="Stock Value" amount={stats.totalStockValue} format="currency" icon="💊" chip="bg-violet-50 text-violet-600" ring="group-hover:ring-violet-300" sub={`${data.medicines.length} medicines`} onClick={() => setDetail("stockValue")} />
+          </>
+        ) : (
+          <>
+            <StatCard label="Today's Appointments" amount={(data.appointments || []).filter(a => a.date === today()).length} icon="📅" chip="bg-indigo-50 text-indigo-600" ring="group-hover:ring-indigo-300" sub="scheduled OPD visits" onClick={() => setPage("reception")} />
+            <StatCard label="Registered Patients" amount={(data.patients || []).length} icon="👥" chip="bg-sky-50 text-sky-600" ring="group-hover:ring-sky-300" sub="active digital UHIDs" onClick={() => setPage("patients")} />
+            <StatCard label="Consultations Logged" amount={(data.consultations || []).length} icon="🩺" chip="bg-teal-50 text-teal-600" ring="group-hover:ring-teal-300" sub="EHR encounter notes" onClick={() => setPage("visitTrail")} />
+            <StatCard label="Lab Tests Pending" amount={(data.labOrders || []).filter(l => l.status === "ordered" || l.status === "sample_collected").length} icon="🔬" chip="bg-violet-50 text-violet-600" ring="group-hover:ring-violet-300" sub="awaiting analysis" onClick={() => setPage("visitTrail")} />
+          </>
         )}
-        {flags.dashLowStock && (
-          <StatCard label="Low Stock" amount={stats.lowStock.length} icon="⚠️" chip="bg-amber-50 text-amber-600" ring="group-hover:ring-amber-300" sub="below set minimum" alert onClick={() => setDetail("low")} />
-        )}
-        {flags.dashOutStock && (
-          <StatCard
-            label="Out of Stock"
-            amount={stats.outStock.length}
-            icon="🚫"
-            chip="bg-rose-50 text-rose-600"
-            ring="group-hover:ring-rose-300"
-            sub="needs reorder"
-            alert
-            onClick={() => (onOpenInventory ? onOpenInventory("out") : setPage("inventory"))}
-          />
-        )}
-        {flags.dashExpired && (
-          <StatCard
-            label="Expired"
-            amount={stats.expired.length}
-            icon="⛔"
-            chip="bg-rose-50 text-rose-600"
-            ring="group-hover:ring-rose-300"
-            sub="remove from shelves"
-            alert
-            onClick={() => (onOpenInventory ? onOpenInventory("expired") : setPage("inventory"))}
-          />
-        )}
-        {flags.dashExp30 && (
-          <StatCard
-            label="Expiry ≤ 30 days"
-            amount={stats.exp30.length}
-            icon="⏰"
-            chip="bg-orange-50 text-orange-600"
-            ring="group-hover:ring-orange-300"
-            sub="urgent attention"
-            alert
-            onClick={() => (onOpenInventory ? onOpenInventory("exp30") : setPage("inventory"))}
-          />
+
+        {canManageInventory(currentUser?.role) && (
+          <>
+            {flags.grnModule && (
+              <StatCard label="Pending GRNs" amount={pendingGRNs.length} icon="✅" chip="bg-amber-50 text-amber-600" ring="group-hover:ring-amber-300" sub="awaiting approval" alert onClick={() => setDetail("pending")} />
+            )}
+            {flags.dashLowStock && (
+              <StatCard label="Low Stock" amount={stats.lowStock.length} icon="⚠️" chip="bg-amber-50 text-amber-600" ring="group-hover:ring-amber-300" sub="below set minimum" alert onClick={() => setDetail("low")} />
+            )}
+            {flags.dashOutStock && (
+              <StatCard
+                label="Out of Stock"
+                amount={stats.outStock.length}
+                icon="🚫"
+                chip="bg-rose-50 text-rose-600"
+                ring="group-hover:ring-rose-300"
+                sub="needs reorder"
+                alert
+                onClick={() => (onOpenInventory ? onOpenInventory("out") : setPage("inventory"))}
+              />
+            )}
+            {flags.dashExpired && (
+              <StatCard
+                label="Expired"
+                amount={stats.expired.length}
+                icon="⛔"
+                chip="bg-rose-50 text-rose-600"
+                ring="group-hover:ring-rose-300"
+                sub="remove from shelves"
+                alert
+                onClick={() => (onOpenInventory ? onOpenInventory("expired") : setPage("inventory"))}
+              />
+            )}
+            {flags.dashExp30 && (
+              <StatCard
+                label="Expiry ≤ 30 days"
+                amount={stats.exp30.length}
+                icon="⏰"
+                chip="bg-orange-50 text-orange-600"
+                ring="group-hover:ring-orange-300"
+                sub="urgent attention"
+                alert
+                onClick={() => (onOpenInventory ? onOpenInventory("exp30") : setPage("inventory"))}
+              />
+            )}
+          </>
         )}
         {flags.dashExp60 && (
           <StatCard
@@ -434,7 +463,9 @@ const Dashboard: React.FC<{
               ...(flags.grnModule ? [{ id: "purchases", label: "GRN Entry", Icon: PackagePlus, c: "from-emerald-500 to-emerald-600" }] : []),
               { id: "inventory", label: "Inventory", Icon: Pill, c: "from-violet-500 to-violet-600" },
               { id: "patients", label: "Add Patient", Icon: UserPlus, c: "from-amber-500 to-amber-600" },
-            ].map((a) => (
+            ]
+              .filter((a) => canAccessPage(currentUser?.role, a.id as PageId))
+              .map((a) => (
                 <button
                   key={a.id}
                   onClick={() => setPage(a.id as PageId)}
@@ -449,8 +480,8 @@ const Dashboard: React.FC<{
         </CardBody>
       </Card>
 
-      {/* Charts — live, animated with Recharts */}
-      {(flags.dashChart7d || flags.dashChart6m) && (
+      {/* Charts — live, animated with Recharts (Financial Workflows Only) */}
+      {canViewFinancials(currentUser?.role) && (flags.dashChart7d || flags.dashChart6m) && (
       <div className={`grid grid-cols-1 ${flags.dashChart7d && flags.dashChart6m ? "lg:grid-cols-2" : ""} gap-4`}>
         {flags.dashChart7d && <Card>
           <CardBody>
@@ -533,9 +564,8 @@ const Dashboard: React.FC<{
       </div>
       )}
 
-      {/* Alerts strip */}
-      {/* ── Inventory Alerts — two columns: Low Stock | Expiry ── */}
-      {(flags.dashLowStock || flags.dashExpired || flags.dashExp30 || flags.dashExp60 || flags.dashExp90 || flags.dashOutStock) && (
+      {/* Alerts strip (Inventory Management Only) */}
+      {canManageInventory(currentUser?.role) && (flags.dashLowStock || flags.dashExpired || flags.dashExp30 || flags.dashExp60 || flags.dashExp90 || flags.dashOutStock) && (
       <div className={`grid grid-cols-1 ${flags.dashLowStock && (flags.dashExpired || flags.dashExp30 || flags.dashExp60 || flags.dashExp90) ? "lg:grid-cols-2" : "lg:grid-cols-1"} gap-4`}>
         {/* Low Stock column */}
         {flags.dashLowStock && <Card className="overflow-hidden">

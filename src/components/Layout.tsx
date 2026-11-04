@@ -3,6 +3,7 @@ import { useStore } from "../store/store";
 import { useTheme } from "../store/theme";
 import { cn } from "../utils/cn";
 import { isOverseer, planAllowsMultiBranch } from "../store/types";
+import { canAccessPage, getRoleBadgeInfo } from "../utils/permissions";
 import { Network } from "lucide-react";
 import logoUrl from "../assets/logo.png";
 
@@ -75,19 +76,16 @@ const Layout: React.FC<{ page: PageId; setPage: (p: PageId) => void; children: R
   const [hoverOpen, setHoverOpen] = useState(false);
   const rail = !hoverOpen;
 
+  const roleBadge = getRoleBadgeInfo(currentUser?.role);
+
   const items = NAV.filter((n) => {
     // developer toggle: hide the whole GRN module for everyone
     if (!flags.grnModule && (n.id === "purchases" || n.id === "grn" || n.id === "approvedGrn")) return false;
     // hide Audit Log when logging is disabled
     if (!flags.auditEnabled && n.id === "audit") return false;
     if (n.id === "branches" && !multiBranch) return false;
-    if (isOverseer(currentUser?.role)) return true;
-    if (currentUser?.role === "admin") {
-      if (n.developerOnly) return false;
-      return true;
-    }
-    if (n.adminOnly || n.developerOnly) return false;
-    return n.staffAllowed !== false;
+    // Strict Role-Based Access Control filtering (omits modules completely)
+    return canAccessPage(currentUser?.role, n.id);
   });
 
   return (
@@ -144,7 +142,11 @@ const Layout: React.FC<{ page: PageId; setPage: (p: PageId) => void; children: R
             </div>
             <div className={cn("flex-1 min-w-0 transition-all duration-200", rail && "lg:w-0 lg:opacity-0 lg:overflow-hidden")}>
               <div className="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate whitespace-nowrap">{currentUser?.name}</div>
-              <div className="text-xs text-slate-500 dark:text-slate-400 capitalize whitespace-nowrap">{currentUser?.role}</div>
+              <div className="mt-0.5">
+                <span className={cn("inline-flex items-center text-[10px] font-bold px-1.5 py-0.2 rounded border whitespace-nowrap", roleBadge.badgeClass)}>
+                  {roleBadge.badge}
+                </span>
+              </div>
             </div>
           </div>
           <button
@@ -173,9 +175,14 @@ const Layout: React.FC<{ page: PageId; setPage: (p: PageId) => void; children: R
             <div className="flex items-start gap-3 min-w-0">
               <button onClick={() => setOpen(true)} className="lg:hidden text-2xl text-slate-600 dark:text-slate-300">☰</button>
               <div className="min-w-0">
-                <h2 className="font-semibold text-slate-800 dark:text-slate-100 capitalize">
-                  {NAV.find((n) => n.id === page)?.label}
-                </h2>
+                <div className="flex items-center gap-2">
+                  <h2 className="font-semibold text-slate-800 dark:text-slate-100 capitalize">
+                    {NAV.find((n) => n.id === page)?.label}
+                  </h2>
+                  <span className={cn("text-[10px] font-bold px-1.5 py-0.5 rounded border whitespace-nowrap shadow-xs hidden sm:inline-flex", roleBadge.badgeClass)}>
+                    {roleBadge.badge}
+                  </span>
+                </div>
                 {isOverseer(currentUser?.role) && (
                   <div className="flex flex-wrap items-center gap-2 mt-1 text-xs">
                     <span className="inline-flex items-center gap-1.5 rounded-full border border-violet-200 dark:border-violet-800 bg-violet-50 dark:bg-violet-900/30 px-2.5 py-1 text-violet-700 dark:text-violet-300 font-semibold">

@@ -1,7 +1,8 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { StoreProvider, useStore } from "./store/store";
 import { ThemeProvider } from "./store/theme";
 import { isOverseer, planAllowsMultiBranch } from "./store/types";
+import { canAccessPage, getRoleHome } from "./utils/permissions";
 import Login from "./pages/Login";
 import Layout, { type PageId } from "./components/Layout";
 import Dashboard from "./pages/Dashboard";
@@ -30,66 +31,65 @@ import Privacy from "./pages/Privacy";
 
 const Inner: React.FC = () => {
   const { currentUser, flags, staffPlan, customStaffPlanLimits } = useStore();
-  const [page, setPage] = useState<PageId>("reception");
+  const [page, setPage] = useState<PageId>(() => getRoleHome(currentUser?.role));
   const [invoiceFocus, setInvoiceFocus] = useState<string | null>(null);
   const [inventoryFilter, setInventoryFilter] = useState<string | null>(null);
   const [focusedPatientId, setFocusedPatientId] = useState<string | null>(null);
   const [focusedUhid, setFocusedUhid] = useState<string | null>(null);
 
+  // Automatically transition to the user's role-dedicated workstation upon login / role switch
+  useEffect(() => {
+    if (currentUser?.role && !canAccessPage(currentUser.role, page)) {
+      setPage(getRoleHome(currentUser.role));
+    }
+  }, [currentUser?.role, page]);
+
   const openInvoice = (id: string) => {
-    setInvoiceFocus(id);
-    setPage("invoices");
+    if (canAccessPage(currentUser?.role, "invoices")) {
+      setInvoiceFocus(id);
+      setPage("invoices");
+    }
   };
 
   const openInventory = (filter?: string) => {
-    setInventoryFilter(filter || null);
-    setPage("inventory");
+    if (canAccessPage(currentUser?.role, "inventory")) {
+      setInventoryFilter(filter || null);
+      setPage("inventory");
+    }
   };
 
   if (!currentUser) return <Login />;
 
-  // Pages allowed for hospital clinical and operational staff
-  const staffAllowed: PageId[] = [
-    "reception",
-    "doctorDashboard",
-    "nursingStation",
-    "diagnosticLab",
-    "visitTrail",
-    "dashboard",
-    "billing",
-    "invoices",
-    "purchases",
-    "salesReturn",
-    "patients",
-    "inventory",
-  ];
-  if (currentUser.role === "staff" && !staffAllowed.includes(page)) {
-    setPage("dashboard");
+  // Strict Role-Based Access Control (RBAC) Route Guard
+  // Clinicians & nurses are completely prevented from loading financial/inventory views
+  if (!canAccessPage(currentUser.role, page)) {
+    const roleHome = getRoleHome(currentUser.role);
+    setPage(roleHome);
     return null;
   }
   // Audit and branches are overseer-only (super admin / developer)
   if ((page === "audit" || page === "branches") && !isOverseer(currentUser.role)) {
-    setPage("dashboard");
+    setPage(getRoleHome(currentUser.role));
     return null;
   }
   // Branches tab / multi-branch tools are Full roster (option 4) or Option 5 with super admin
   if (page === "branches" && !planAllowsMultiBranch(staffPlan, customStaffPlanLimits)) {
-    setPage("dashboard");
+    setPage(getRoleHome(currentUser.role));
     return null;
   }
   // Users is admin/overseer only; Settings is open to staff too (branch payment settings)
   if (page === "users" && currentUser.role !== "admin" && !isOverseer(currentUser.role)) {
-    setPage("dashboard");
+    setPage(getRoleHome(currentUser.role));
     return null;
   }
   // GRN module disabled by developer toggle
   if (!flags.grnModule && (page === "purchases" || page === "grn" || page === "approvedGrn")) {
-    setPage("dashboard");
+    setPage(getRoleHome(currentUser.role));
     return null;
   }
   // Audit hidden when logging is disabled
   if (!flags.auditEnabled && page === "audit") {
-    setPage("dashboard");
+    setPage(getRoleHome(currentUser.role));
     return null;
   }
 
@@ -99,16 +99,22 @@ const Inner: React.FC = () => {
       content = (
         <Reception
           onNavigateToDoctor={(pId) => {
-            setFocusedPatientId(pId);
-            setPage("doctorDashboard");
+            if (canAccessPage(currentUser?.role, "doctorDashboard")) {
+              setFocusedPatientId(pId);
+              setPage("doctorDashboard");
+            }
           }}
           onNavigateToNurse={(pId) => {
-            setFocusedPatientId(pId);
-            setPage("nursingStation");
+            if (canAccessPage(currentUser?.role, "nursingStation")) {
+              setFocusedPatientId(pId);
+              setPage("nursingStation");
+            }
           }}
           onNavigateToVisitTrail={(uhid) => {
-            setFocusedUhid(uhid);
-            setPage("visitTrail");
+            if (canAccessPage(currentUser?.role, "visitTrail")) {
+              setFocusedUhid(uhid);
+              setPage("visitTrail");
+            }
           }}
         />
       );
@@ -117,11 +123,21 @@ const Inner: React.FC = () => {
       content = (
         <DoctorDashboard
           initialPatientId={focusedPatientId || undefined}
-          onNavigateToPharmacy={() => setPage("billing")}
-          onNavigateToLab={() => setPage("diagnosticLab")}
+          onNavigateToPharmacy={() => {
+            if (canAccessPage(currentUser?.role, "billing")) {
+              setPage("billing");
+            }
+          }}
+          onNavigateToLab={() => {
+            if (canAccessPage(currentUser?.role, "diagnosticLab")) {
+              setPage("diagnosticLab");
+            }
+          }}
           onNavigateToVisitTrail={(uhid) => {
-            setFocusedUhid(uhid);
-            setPage("visitTrail");
+            if (canAccessPage(currentUser?.role, "visitTrail")) {
+              setFocusedUhid(uhid);
+              setPage("visitTrail");
+            }
           }}
         />
       );
@@ -131,12 +147,16 @@ const Inner: React.FC = () => {
         <NursingStation
           initialPatientId={focusedPatientId || undefined}
           onNavigateToDoctor={(pId) => {
-            setFocusedPatientId(pId);
-            setPage("doctorDashboard");
+            if (canAccessPage(currentUser?.role, "doctorDashboard")) {
+              setFocusedPatientId(pId);
+              setPage("doctorDashboard");
+            }
           }}
           onNavigateToVisitTrail={(uhid) => {
-            setFocusedUhid(uhid);
-            setPage("visitTrail");
+            if (canAccessPage(currentUser?.role, "visitTrail")) {
+              setFocusedUhid(uhid);
+              setPage("visitTrail");
+            }
           }}
         />
       );
@@ -144,10 +164,16 @@ const Inner: React.FC = () => {
     case "diagnosticLab":
       content = (
         <DiagnosticLab
-          onNavigateToBilling={() => setPage("billing")}
+          onNavigateToBilling={() => {
+            if (canAccessPage(currentUser?.role, "billing")) {
+              setPage("billing");
+            }
+          }}
           onNavigateToVisitTrail={(uhid) => {
-            setFocusedUhid(uhid);
-            setPage("visitTrail");
+            if (canAccessPage(currentUser?.role, "visitTrail")) {
+              setFocusedUhid(uhid);
+              setPage("visitTrail");
+            }
           }}
         />
       );
@@ -156,7 +182,11 @@ const Inner: React.FC = () => {
       content = (
         <VisitTrail
           initialUhid={focusedUhid || undefined}
-          onNavigateToBilling={() => setPage("billing")}
+          onNavigateToBilling={(pId) => {
+            if (canAccessPage(currentUser?.role, "billing")) {
+              setPage("billing");
+            }
+          }}
         />
       );
       break;
