@@ -142,7 +142,7 @@ const MinStockInputCell: React.FC<MinStockInputCellProps> = ({ medicine, canEdit
 
 const Inventory: React.FC<InventoryProps> = ({ initialFilter, onConsumeFilter }) => {
   const { data, setData, log, flags, currentUser } = useStore();
-  const isDevOrAdmin = currentUser?.role === "developer" || currentUser?.role === "superadmin" || currentUser?.role === "admin";
+  const isDevOrAdmin = currentUser?.role === "developer" || currentUser?.role === "superadmin" || currentUser?.role === "admin" || currentUser?.role === "admin_pharmacist";
   const canCustomizeMinStock = Boolean(isDevOrAdmin);
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<InventoryFilter>(initialFilter || "all");

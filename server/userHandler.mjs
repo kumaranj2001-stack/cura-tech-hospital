@@ -30,7 +30,19 @@ export function validateUserPayload(payload = {}, isUpdate = false) {
   }
 
   if (role !== undefined) {
-    const validRoles = ["developer", "superadmin", "admin", "staff"];
+    const validRoles = [
+      "developer",
+      "superadmin",
+      "admin",
+      "staff",
+      "doctor",
+      "receptionist",
+      "nurse",
+      "staff_pharmacist",
+      "admin_pharmacist",
+      "pharmacist",
+      "lab_tech",
+    ];
     if (!validRoles.includes(role)) {
       errors.push(`Invalid role '${role}'. Valid roles are: ${validRoles.join(", ")}`);
     }
@@ -43,7 +55,7 @@ export function validateUserPayload(payload = {}, isUpdate = false) {
       username,
       name,
       password,
-      role: role || "staff",
+      role: role || "staff_pharmacist",
       branchId: payload.branchId ? String(payload.branchId).trim() : undefined,
       active: payload.active !== undefined ? Boolean(payload.active) : true,
     },

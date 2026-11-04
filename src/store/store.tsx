@@ -94,8 +94,8 @@ const defaultUsers: User[] = [
     id: "u_admin",
     username: "kumaran",
     password: "kumaranjkms",
-    name: "Kumaran (Admin)",
-    role: "admin",
+    name: "Kumaran (Admin Pharmacist)",
+    role: "admin_pharmacist",
     branchId: "br_main",
     active: true,
     createdAt: new Date().toISOString(),
@@ -135,7 +135,7 @@ const defaultUsers: User[] = [
     username: "pharmacist",
     password: "pharma123",
     name: "Chief Pharmacist",
-    role: "pharmacist",
+    role: "staff_pharmacist",
     branchId: "br_main",
     active: true,
     createdAt: new Date().toISOString(),
@@ -155,7 +155,7 @@ const defaultUsers: User[] = [
     username: "staff123",
     password: "kumaranjk",
     name: "Hospital Staff",
-    role: "staff",
+    role: "staff_pharmacist",
     branchId: "br_main",
     active: true,
     createdAt: new Date().toISOString(),
@@ -308,6 +308,14 @@ function ensureDefaults(data: AppData): AppData {
   if (guru && guru.role !== "developer") {
     guru.role = "developer";
   }
+
+  // Migrate legacy generic 'admin' and 'staff' roles to specific hospital roles
+  next.users = next.users.map((u) => {
+    if (u.role === "admin") return { ...u, role: "admin_pharmacist" };
+    if (u.role === "staff" || u.role === "pharmacist") return { ...u, role: "staff_pharmacist" };
+    return u;
+  });
+
   return next;
 }
 
@@ -719,7 +727,13 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
     try {
       const raw = sessionStorage.getItem(SESSION_KEY);
-      return raw ? (JSON.parse(raw) as User) : null;
+      if (raw) {
+        let u = JSON.parse(raw) as User;
+        if (u.role === "admin") u = { ...u, role: "admin_pharmacist" };
+        else if (u.role === "staff" || u.role === "pharmacist") u = { ...u, role: "staff_pharmacist" };
+        return u;
+      }
+      return null;
     } catch {
       return null;
     }

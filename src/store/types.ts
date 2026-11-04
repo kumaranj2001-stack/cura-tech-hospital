@@ -1,14 +1,27 @@
-export type Role = "admin" | "staff";
-export type UserRole = "superadmin" | "developer" | "admin" | "staff" | "doctor" | "nurse" | "receptionist" | "pharmacist" | "lab_tech";
+export type Role = "admin" | "staff" | "admin_pharmacist" | "staff_pharmacist";
+export type UserRole =
+  | "superadmin"
+  | "developer"
+  | "doctor"
+  | "receptionist"
+  | "nurse"
+  | "staff_pharmacist"
+  | "admin_pharmacist"
+  | "pharmacist"
+  | "admin"
+  | "staff"
+  | "lab_tech";
 
 /* Roles with full multi-branch oversight (super admin + legacy developer) */
 export const isOverseer = (role?: string) => role === "superadmin" || role === "developer";
 /* Roles with admin-level operational privileges */
-export const isAdminLike = (role?: string) => role === "admin" || isOverseer(role);
+export const isAdminLike = (role?: string) =>
+  role === "admin" || role === "admin_pharmacist" || isOverseer(role);
 export const isDoctorRole = (role?: string) => role === "doctor" || isAdminLike(role);
 export const isNurseRole = (role?: string) => role === "nurse" || isAdminLike(role);
 export const isReceptionistRole = (role?: string) => role === "receptionist" || isAdminLike(role);
-export const isPharmacistRole = (role?: string) => role === "pharmacist" || role === "staff" || isAdminLike(role);
+export const isPharmacistRole = (role?: string) =>
+  role === "pharmacist" || role === "staff_pharmacist" || role === "admin_pharmacist" || role === "staff" || isAdminLike(role);
 export const isLabTechRole = (role?: string) => role === "lab_tech" || isAdminLike(role);
 
 export interface Branch {
@@ -538,9 +551,9 @@ export const isStaffPlanTier = (value: unknown): value is StaffPlanTier =>
 export const formatPlanCap = (n: number) => (Number.isFinite(n) ? String(n) : "unlimited");
 
 export const roleQuota = (limits: StaffPlanLimits, role: UserRole): number => {
-  if (role === "staff") return limits.staff;
-  if (role === "admin") return limits.admin;
+  if (role === "admin" || role === "admin_pharmacist") return limits.admin;
   if (role === "superadmin") return limits.superadmin;
+  if (role === "staff") return limits.staff;
   return Number.POSITIVE_INFINITY;
 };
 
@@ -554,8 +567,9 @@ export const canCreateAccount = (
   if (role === "developer") return { ok: true };
   const limits = staffPlanLimits(tier, customLimits);
   const max = roleQuota(limits, role);
-  const used = users.filter((u) => u.role === role && u.id !== exceptId).length;
-  const label = role === "staff" ? "staff" : role === "admin" ? "admin" : "super admin";
+  if (!Number.isFinite(max)) return { ok: true };
+  const used = users.filter((u) => (u.role === role || (role === "admin_pharmacist" && u.role === "admin") || (role === "admin" && u.role === "admin_pharmacist")) && u.id !== exceptId).length;
+  const label = role === "admin_pharmacist" ? "admin pharmacist" : role === "staff_pharmacist" ? "staff pharmacist" : role === "admin" ? "admin" : role === "staff" ? "staff" : "super admin";
   if (max <= 0) {
     return { ok: false, message: `The selected plan does not permit ${label} accounts.` };
   }

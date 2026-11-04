@@ -74,7 +74,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissionConfig> = {
   // Completely omits clinical notes, inventory, and management
   receptionist: {
     label: "Medical Receptionist (Front Desk)",
-    badge: "🏢 Reception",
+    badge: "🏢 Receptionist",
     badgeClass: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800",
     defaultHome: "reception",
     allowedPages: ["reception", "patients", "doctors", "visitTrail", "privacy"],
@@ -85,11 +85,10 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissionConfig> = {
     canAccessLab: false,
   },
 
-  // Pharmacy Personnel: Accesses ONLY prescription fulfillment, pharmacy billing, and stock management
-  // Omitted from clinical consultations, nursing notes, and lab reports
-  pharmacist: {
-    label: "Hospital Pharmacist",
-    badge: "💊 Pharmacy",
+  // Staff Pharmacists: Accesses prescription fulfillment, pharmacy billing, and stock management
+  staff_pharmacist: {
+    label: "Staff Pharmacist",
+    badge: "💊 Staff Pharmacist",
     badgeClass: "bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border-amber-200 dark:border-amber-800",
     defaultHome: "billing",
     allowedPages: [
@@ -100,6 +99,67 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissionConfig> = {
       "salesReturn",
       "returns",
       "suppliers",
+      "patients",
+      "privacy",
+    ],
+    canViewFinancials: true,
+    canManageInventory: true,
+    canRecordVitals: false,
+    canWriteConsultations: false,
+    canAccessLab: false,
+  },
+
+  // Admin Pharmacists: Pharmacy and operational management across hospital modules
+  admin_pharmacist: {
+    label: "Admin Pharmacist",
+    badge: "🛡️ Admin Pharmacist",
+    badgeClass: "bg-sky-50 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300 border-sky-200 dark:border-sky-800",
+    defaultHome: "dashboard",
+    allowedPages: [
+      "dashboard",
+      "reception",
+      "doctorDashboard",
+      "nursingStation",
+      "diagnosticLab",
+      "visitTrail",
+      "billing",
+      "invoices",
+      "patients",
+      "doctors",
+      "inventory",
+      "purchases",
+      "grn",
+      "salesReturn",
+      "returns",
+      "suppliers",
+      "reports",
+      "users",
+      "settings",
+      "privacy",
+    ],
+    canViewFinancials: true,
+    canManageInventory: true,
+    canRecordVitals: true,
+    canWriteConsultations: true,
+    canAccessLab: true,
+  },
+
+  // Pharmacy Personnel (legacy/alias for staff_pharmacist)
+  // Omitted from clinical consultations, nursing notes, and lab reports
+  pharmacist: {
+    label: "Staff Pharmacist",
+    badge: "💊 Staff Pharmacist",
+    badgeClass: "bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border-amber-200 dark:border-amber-800",
+    defaultHome: "billing",
+    allowedPages: [
+      "billing",
+      "invoices",
+      "inventory",
+      "purchases",
+      "salesReturn",
+      "returns",
+      "suppliers",
+      "patients",
       "privacy",
     ],
     canViewFinancials: true,

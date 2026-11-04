@@ -85,4 +85,22 @@ const searchRes = listUsers(deleteRes.users, { q: "admin" });
 console.assert(searchRes.length === 1 && searchRes[0].username === "admin1", "Search by query should work");
 console.log("✓ User listing and search filtering verified");
 
+// 6. Specific Hospital Roles (Doctor, Receptionist, Nurse, Staff Pharmacist, Admin Pharmacist)
+console.log("\n6. Testing specific hospital role creation and validation...");
+const hospitalRoles = ["doctor", "receptionist", "nurse", "staff_pharmacist", "admin_pharmacist"];
+let currentList = deleteRes.users;
+for (const hr of hospitalRoles) {
+  const created = createUser({
+    username: `user_${hr}`,
+    name: `User ${hr}`,
+    password: "password123",
+    role: hr,
+    branchId: "br_main",
+  }, currentList);
+  console.assert(created.success, `Should create user with role ${hr}`);
+  console.assert(created.user.role === hr, `Role should match ${hr}`);
+  currentList = created.users;
+}
+console.log("✓ All hospital roles (Doctor, Receptionist, Nurse, Staff Pharmacist, Admin Pharmacist) validated and created");
+
 console.log("\nALL USER MANAGEMENT HANDLER TESTS PASSED!");

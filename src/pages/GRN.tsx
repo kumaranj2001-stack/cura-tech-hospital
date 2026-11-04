@@ -75,7 +75,7 @@ const GRN: React.FC = () => {
     setView(finalGrn);
   };
 
-  const isAdmin = currentUser?.role === "admin" || isOverseer(currentUser?.role);
+  const isAdmin = currentUser?.role === "admin" || currentUser?.role === "admin_pharmacist" || isOverseer(currentUser?.role);
   const pending = data.grns.filter((g) => g.status === "pending");
   const history = data.grns.filter((g) => g.status !== "pending");
 

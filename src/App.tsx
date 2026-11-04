@@ -78,7 +78,7 @@ const Inner: React.FC = () => {
     return null;
   }
   // Users is admin/overseer only; Settings is open to staff too (branch payment settings)
-  if (page === "users" && currentUser.role !== "admin" && !isOverseer(currentUser.role)) {
+  if (page === "users" && currentUser.role !== "admin" && currentUser.role !== "admin_pharmacist" && !isOverseer(currentUser.role)) {
     setPage(getRoleHome(currentUser.role));
     return null;
   }

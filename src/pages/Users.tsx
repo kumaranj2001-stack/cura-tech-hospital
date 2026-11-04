@@ -4,7 +4,7 @@ import { Card, CardBody, Input, PasswordInput, Label, Button, Modal, Badge, Sele
 import { fmtDate } from "../utils/helpers";
 import { sanitizeText, sanitizeUsername, sanitizePassword } from "../utils/security";
 import type { User, UserRole } from "../store/types";
-import { isOverseer, canCreateAccount, formatPlanCap, staffPlanLimits } from "../store/types";
+import { isOverseer, canCreateAccount, staffPlanLimits } from "../store/types";
 
 const Users: React.FC = () => {
   const { data, currentUser, currentBranch, log, staffPlan, customStaffPlanLimits, createUser, updateUser, deleteUser, flashToast } = useStore();
@@ -15,29 +15,37 @@ const Users: React.FC = () => {
     username: "",
     password: "",
     name: "",
-    role: "staff",
+    role: "doctor",
     branchId: "",
     active: true,
   });
   const isDev = currentUser?.role === "developer";
   const isSuper = currentUser?.role === "superadmin";
-  // Super Admins cannot manage Developer / other Super Admin accounts — only the Developer can
-  const protectedFromMe = (target: User) =>
-    isSuper && (target.role === "developer" || (target.role === "superadmin" && target.id !== currentUser?.id));
+  const isDeveloper = isOverseer(currentUser?.role);
+  const isAdmin = currentUser?.role === "admin" || currentUser?.role === "admin_pharmacist";
+  const myBranchId = isAdmin ? currentUser?.branchId || currentBranch?.id || "" : "";
+
+  // Check whether target user account can be managed by the current user
+  const canManageUser = (target: User) => {
+    if (isDev) return true;
+    if (target.role === "developer" || target.username === "guru") return false;
+    if (isSuper) return target.role !== "developer" && (target.role !== "superadmin" || target.id === currentUser?.id);
+    if (isAdmin) {
+      if (isOverseer(target.role)) return false;
+      if (target.role === "admin" || target.role === "admin_pharmacist") {
+        return target.id === currentUser?.id;
+      }
+      return true;
+    }
+    return false;
+  };
+
+  const protectedFromMe = (target: User) => !canManageUser(target);
   const [resetUser, setResetUser] = useState<User | null>(null);
   const [newPwd, setNewPwd] = useState("");
   const [branchFilter, setBranchFilter] = useState("all");
 
-  const isDeveloper = isOverseer(currentUser?.role);
-  const isAdmin = currentUser?.role === "admin";
-  const myBranchId = currentUser?.role === "admin" ? currentUser?.branchId || currentBranch?.id || "" : "";
   const planLimits = staffPlanLimits(staffPlan, customStaffPlanLimits);
-  const usedStaff = data.users.filter((u) => u.role === "staff").length;
-  const usedAdmin = data.users.filter((u) => u.role === "admin").length;
-  const usedSuper = data.users.filter((u) => u.role === "superadmin").length;
-  const staffSlotsLeft = Number.isFinite(planLimits.staff) ? Math.max(0, planLimits.staff - usedStaff) : Number.POSITIVE_INFINITY;
-  const staffCreateCheck = canCreateAccount(data.users, "staff", staffPlan, undefined, customStaffPlanLimits);
-  const canAddStaff = staffCreateCheck.ok;
 
   const branchName = (id?: string) => data.branches.find((b) => b.id === id)?.name || "Unassigned";
 
@@ -49,7 +57,7 @@ const Users: React.FC = () => {
     return data.users.filter((u) => u.branchId === myBranchId || u.id === currentUser?.id);
   }, [data.users, isDeveloper, branchFilter, myBranchId, currentUser?.id]);
 
-  if (currentUser?.role !== "admin" && !isOverseer(currentUser?.role)) {
+  if (!isAdmin && !isOverseer(currentUser?.role)) {
     return (
       <Card>
         <CardBody className="text-center text-slate-500 py-12">⛔ Admin or Super Admin access required</CardBody>
@@ -75,29 +83,25 @@ const Users: React.FC = () => {
     setOpen(true);
   };
 
-  const openNewStaff = () => openForm("staff");
-
-  const openNewUser = () => {
-    const order: UserRole[] = ["staff", "admin", "superadmin"];
-    const role = order.find((r) => canCreateAccount(data.users, r, staffPlan, undefined, customStaffPlanLimits).ok) || "staff";
-    openForm(role);
+  const openNewUser = (defaultRole: UserRole = "doctor") => {
+    openForm(defaultRole);
   };
 
   const openEdit = (u: User) => {
-    if (currentUser?.role === "admin" && u.role !== "staff") {
-      alert("Admins can only edit Staff accounts. Contact the Super Admin or Developer.");
-      return;
-    }
     if (protectedFromMe(u)) {
-      alert("Only the Developer can manage Developer and Super Admin accounts.");
+      alert("You do not have permission to manage this account.");
       return;
     }
     setEdit(u);
+    let mappedRole = u.role;
+    if (mappedRole === "admin") mappedRole = "admin_pharmacist";
+    else if (mappedRole === "staff" || mappedRole === "pharmacist") mappedRole = "staff_pharmacist";
+
     setForm({
       username: u.username,
       password: u.password,
       name: u.name,
-      role: u.role,
+      role: mappedRole,
       branchId: u.branchId || "",
       active: u.active,
     });
@@ -123,12 +127,8 @@ const Users: React.FC = () => {
     try {
       setSubmitting(true);
       if (edit) {
-        if (currentUser?.role === "admin" && edit.role !== "staff") {
-          alert("Admins can only edit Staff accounts. Contact the Super Admin or Developer.");
-          return;
-        }
         if (protectedFromMe(edit)) {
-          alert("Only the Developer can manage Developer and Super Admin accounts.");
+          alert("You do not have permission to manage this account.");
           return;
         }
         if (cleanForm.role !== edit.role) {
@@ -146,9 +146,9 @@ const Users: React.FC = () => {
         if (isOverseer(edit.role) && !isDev) {
           // Non-developer overseers can't change another overseer's role/branch
           updatePayload = { name: cleanForm.name, password: cleanForm.password, active: cleanForm.active };
-        } else if (currentUser?.role === "admin") {
-          // Admin edits keep the staff member in their existing branch
-          updatePayload = { username: cleanForm.username, password: cleanForm.password, name: cleanForm.name, active: cleanForm.active };
+        } else if (isAdmin) {
+          // Admin edits keep the user in their existing branch
+          updatePayload = { username: cleanForm.username, password: cleanForm.password, name: cleanForm.name, role: cleanForm.role, active: cleanForm.active };
         } else {
           updatePayload = cleanForm;
         }
@@ -157,8 +157,8 @@ const Users: React.FC = () => {
         log("USER_UPDATE", `${trimmedUsername} (${branchName(targetBranchId)})`);
         flashToast("User updated successfully", "ok");
       } else {
-        if (currentUser?.role === "admin" && cleanForm.role !== "staff") {
-          return alert("Admins can only add Staff accounts.");
+        if (isAdmin && (cleanForm.role === "developer" || cleanForm.role === "superadmin")) {
+          return alert("Admins cannot create Developer or Super Admin accounts.");
         }
         const quota = canCreateAccount(data.users, cleanForm.role, staffPlan, undefined, customStaffPlanLimits);
         if (!quota.ok) return alert(quota.message);
@@ -182,12 +182,8 @@ const Users: React.FC = () => {
   };
 
   const toggleActive = async (u: User) => {
-    if (currentUser?.role === "admin" && u.role !== "staff") {
-      alert("Admins can only deactivate Staff accounts.");
-      return;
-    }
     if (protectedFromMe(u)) {
-      alert("Only the Developer can deactivate Developer and Super Admin accounts.");
+      alert("You do not have permission to modify this account.");
       return;
     }
     if (u.id === currentUser?.id) {
@@ -204,12 +200,8 @@ const Users: React.FC = () => {
   };
 
   const remove = async (u: User) => {
-    if (currentUser?.role === "admin" && u.role !== "staff") {
-      alert("Admins can only delete Staff accounts.");
-      return;
-    }
     if (protectedFromMe(u)) {
-      alert("Only the Developer can delete Developer and Super Admin accounts.");
+      alert("You do not have permission to delete this account.");
       return;
     }
     if (u.id === currentUser?.id) {
@@ -234,12 +226,8 @@ const Users: React.FC = () => {
     const pwd = newPwd.trim();
     if (!resetUser || !pwd) return alert("Password cannot be empty");
     if (pwd.length < 4) return alert("Password must be at least 4 characters");
-    if (currentUser?.role === "admin" && resetUser.role !== "staff") {
-      alert("Admins can only reset passwords of Staff accounts.");
-      return;
-    }
     if (protectedFromMe(resetUser)) {
-      alert("Only the Developer can reset Developer and Super Admin passwords.");
+      alert("You do not have permission to reset this account's password.");
       return;
     }
     if (isOverseer(resetUser.role) && currentUser?.id === resetUser.id) {
@@ -260,11 +248,31 @@ const Users: React.FC = () => {
     }
   };
 
-  const roleBadge = (u: User) =>
-    u.role === "superadmin" ? <Badge tone="amber">SUPER ADMIN</Badge>
-    : u.role === "developer" ? <Badge tone="amber">DEVELOPER</Badge>
-    : u.role === "admin" ? <Badge tone="blue">ADMIN</Badge>
-    : <Badge tone="slate">STAFF</Badge>;
+  const roleBadge = (u: User) => {
+    switch (u.role) {
+      case "superadmin":
+        return <Badge tone="amber">SUPER ADMIN</Badge>;
+      case "developer":
+        return <Badge tone="red">DEVELOPER</Badge>;
+      case "admin_pharmacist":
+      case "admin":
+        return <Badge tone="blue">ADMIN PHARMACIST</Badge>;
+      case "doctor":
+        return <Badge tone="indigo">DOCTOR</Badge>;
+      case "nurse":
+        return <Badge tone="teal">NURSE</Badge>;
+      case "receptionist":
+        return <Badge tone="emerald">RECEPTIONIST</Badge>;
+      case "staff_pharmacist":
+      case "pharmacist":
+      case "staff":
+        return <Badge tone="amber">STAFF PHARMACIST</Badge>;
+      case "lab_tech":
+        return <Badge tone="purple">LAB TECH</Badge>;
+      default:
+        return <Badge tone="slate">{String(u.role).toUpperCase().replace(/_/g, " ")}</Badge>;
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -279,22 +287,17 @@ const Users: React.FC = () => {
                   : `Managing users for ${branchName(myBranchId)} only. Other branches are hidden.`}
               </div>
               <div className="text-[11px] text-slate-400 mt-1">
-                Account Plan (Fully Customizable): Super Admin {usedSuper}/{formatPlanCap(planLimits.superadmin)} · Admin {usedAdmin}/{formatPlanCap(planLimits.admin)} · Staff {usedStaff}/{formatPlanCap(planLimits.staff)}
+                Roles: Doctors, Receptionists, Nurses, Staff Pharmacists & Admin Pharmacists
               </div>
             </div>
             <div className="flex flex-wrap sm:flex-nowrap gap-2 w-full sm:w-auto">
-              {(isAdmin || isDeveloper) && (
+              {(isAdmin || isDeveloper || isSuper) && (
                 <Button
-                  onClick={openNewStaff}
+                  onClick={() => openNewUser()}
                   className="w-full sm:w-auto"
-                  disabled={!canAddStaff}
-                  title={canAddStaff ? "Add a staff account within the active plan" : staffCreateCheck.message}
                 >
-                  + Add Staff
+                  + Add User
                 </Button>
-              )}
-              {(isDev || isSuper) && (
-                <Button variant="secondary" onClick={openNewUser} className="w-full sm:w-auto">+ New User</Button>
               )}
             </div>
           </div>
@@ -341,19 +344,15 @@ const Users: React.FC = () => {
                 <span>· Created {fmtDate(u.createdAt)}</span>
               </div>
               <div className="flex gap-2 flex-wrap border-t border-slate-100 dark:border-slate-800 pt-3">
-                {(isDeveloper || u.role === "staff") && (
-                  <Button size="sm" variant="secondary" onClick={() => openEdit(u)}>✏ Edit</Button>
-                )}
-                {(isDeveloper || u.role === "staff") && (
-                  <Button size="sm" variant="secondary" onClick={() => { setResetUser(u); setNewPwd(""); }}>🔑 Password</Button>
-                )}
-                {(isDeveloper || u.role === "staff") && (
-                  <Button size="sm" variant={u.active ? "danger" : "success"} onClick={() => toggleActive(u)}>
-                    {u.active ? "🚫 Deactivate" : "✅ Activate"}
-                  </Button>
-                )}
-                {(isDeveloper || u.role === "staff") && (
-                  <Button size="sm" variant="ghost" onClick={() => remove(u)}>🗑 Delete</Button>
+                {canManageUser(u) && (
+                  <>
+                    <Button size="sm" variant="secondary" onClick={() => openEdit(u)}>✏ Edit</Button>
+                    <Button size="sm" variant="secondary" onClick={() => { setResetUser(u); setNewPwd(""); }}>🔑 Password</Button>
+                    <Button size="sm" variant={u.active ? "danger" : "success"} onClick={() => toggleActive(u)}>
+                      {u.active ? "🚫 Deactivate" : "✅ Activate"}
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => remove(u)}>🗑 Delete</Button>
+                  </>
                 )}
               </div>
             </CardBody>
@@ -391,7 +390,7 @@ const Users: React.FC = () => {
                     <td className="px-4 py-3">{u.active ? <Badge tone="green">Active</Badge> : <Badge tone="red">Inactive</Badge>}</td>
                     <td className="px-4 py-3 text-xs text-slate-500">{fmtDate(u.createdAt)}</td>
                     <td className="px-4 py-3 text-right">
-                      {(isDeveloper || u.role === "staff") ? (
+                      {canManageUser(u) ? (
                         <div className="flex gap-1 justify-end">
                           <Button size="sm" variant="ghost" title="Edit user" onClick={() => openEdit(u)}>✏</Button>
                           <Button size="sm" variant="ghost" title="Reset password" onClick={() => { setResetUser(u); setNewPwd(""); }}>🔑</Button>
@@ -399,7 +398,7 @@ const Users: React.FC = () => {
                           <Button size="sm" variant="ghost" title="Delete user" onClick={() => remove(u)}>🗑</Button>
                         </div>
                       ) : (
-                        <span className="text-xs text-slate-400 italic">Developer only</span>
+                        <span className="text-xs text-slate-400 italic">Protected</span>
                       )}
                     </td>
                   </tr>
@@ -429,24 +428,23 @@ const Users: React.FC = () => {
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <Label>Role</Label>
-              <Select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as UserRole })} disabled={!isDeveloper && !isSuper}>
-                {(planLimits.staff > 0 || form.role === "staff") && <option value="staff">Staff</option>}
-                {(isDev || isSuper) && (planLimits.admin > 0 || form.role === "admin") && <option value="admin">Admin</option>}
-                {(isDev || isSuper) && (planLimits.superadmin > 0 || form.role === "superadmin") && <option value="superadmin">Super Admin</option>}
+              <Label>Role *</Label>
+              <Select
+                value={form.role}
+                onChange={(e) => setForm({ ...form, role: e.target.value as UserRole })}
+                disabled={!isDeveloper && !isSuper && !isAdmin}
+              >
+                <option value="doctor">Doctors</option>
+                <option value="receptionist">Receptionists</option>
+                <option value="nurse">Nurses</option>
+                <option value="staff_pharmacist">Staff Pharmacists</option>
+                <option value="admin_pharmacist">Admin Pharmacists</option>
+                {(isDev || isSuper) && <option value="superadmin">Super Admin</option>}
                 {isDev && <option value="developer">Developer</option>}
               </Select>
-              {isDev && (
-                <p className="text-[11px] text-violet-500 dark:text-violet-300 mt-1">Roles are limited by the active Account Plan quotas. Developer accounts are not counted.</p>
-              )}
-              {isSuper && (
-                <p className="text-[11px] text-slate-400 mt-1">Super Admins can create roles permitted within the active plan limits.</p>
-              )}
-              {isAdmin && (
-                <p className="text-[11px] text-slate-400 mt-1">
-                  Admins can add Staff only. {Number.isFinite(staffSlotsLeft) ? `${staffSlotsLeft} of ${planLimits.staff} staff slot${planLimits.staff === 1 ? "" : "s"} remaining.` : "Staff accounts are unlimited on this plan."}
-                </p>
-              )}
+              <p className="text-[11px] text-slate-400 mt-1">
+                Configure role access: Doctors, Receptionists, Nurses, Staff Pharmacists, or Admin Pharmacists.
+              </p>
             </div>
             <div>
               <Label>{form.role === "developer" || form.role === "superadmin" ? "Branch (not required)" : "Branch *"}</Label>

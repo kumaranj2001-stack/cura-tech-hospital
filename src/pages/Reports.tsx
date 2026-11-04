@@ -412,13 +412,18 @@ const Reports: React.FC = () => {
               const roleBadgeTone = (role: string): "purple" | "blue" | "green" | "amber" => {
                 if (role === "superadmin") return "purple";
                 if (role === "developer") return "amber";
-                if (role === "admin") return "blue";
+                if (role === "admin" || role === "admin_pharmacist") return "blue";
                 return "green";
               };
               const roleLabel = (role: string) => {
                 if (role === "superadmin") return "Super Admin";
                 if (role === "developer") return "Developer";
-                if (role === "admin") return "Admin";
+                if (role === "admin_pharmacist") return "Admin Pharmacist";
+                if (role === "admin") return "Admin Pharmacist";
+                if (role === "doctor") return "Doctor";
+                if (role === "nurse") return "Nurse";
+                if (role === "receptionist") return "Receptionist";
+                if (role === "staff_pharmacist" || role === "pharmacist") return "Staff Pharmacist";
                 return "Staff";
               };
 

@@ -168,7 +168,7 @@ export function createMedicine(payload = {}, medicines = [], options = {}) {
  */
 export function isAuthorizedForMinStock(role) {
   const r = String(role || "").toLowerCase();
-  return r === "developer" || r === "superadmin" || r === "admin";
+  return r === "developer" || r === "superadmin" || r === "admin" || r === "admin_pharmacist";
 }
 
 /**

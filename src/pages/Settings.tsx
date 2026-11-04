@@ -362,10 +362,10 @@ service cloud.firestore {
 const Settings: React.FC = () => {
   const { data, currentUser, log, cloudReady, cloudSyncing, cloudError, flags, setFlag, setFlagsBatch, staffPlan, setStaffPlan, customStaffPlanLimits, payment, branchPayments, setBranchPayment, buildBranchBackup, restoreBranchBackup, purgeAllBusinessData } = useStore();
   const isSuperAdmin = currentUser?.role === "superadmin";
-  const isAdmin = currentUser?.role === "admin";
+  const isAdmin = currentUser?.role === "admin" || currentUser?.role === "admin_pharmacist";
   const isDeveloper = isOverseer(currentUser?.role);
   const isDevAccount = currentUser?.role === "developer";
-  const isStaff = currentUser?.role === "staff";
+  const isStaff = currentUser?.role === "staff" || currentUser?.role === "staff_pharmacist" || currentUser?.role === "pharmacist";
   const canViewPayments = isAdmin || isSuperAdmin;
 
   // Option 5 - Fully Customizable Account Plan state
@@ -485,7 +485,7 @@ const Settings: React.FC = () => {
     }
   };
 
-  if (currentUser?.role !== "admin" && currentUser?.role !== "staff" && !isOverseer(currentUser?.role)) {
+  if (currentUser?.role !== "admin" && currentUser?.role !== "admin_pharmacist" && currentUser?.role !== "staff" && currentUser?.role !== "staff_pharmacist" && !isOverseer(currentUser?.role)) {
     return <Card><CardBody className="text-center text-slate-500 dark:text-slate-400 py-12">⛔ Admin or Super Admin access required</CardBody></Card>;
   }
 
