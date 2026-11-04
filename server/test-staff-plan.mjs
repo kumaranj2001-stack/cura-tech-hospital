@@ -13,6 +13,7 @@ async function testStaffPlanEndpoints() {
         method,
         headers: {
           "Content-Type": "application/json",
+          "x-user-role": "superadmin",
         },
       };
 

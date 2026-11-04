@@ -67,18 +67,19 @@ const Inner: React.FC = () => {
     setPage(roleHome);
     return null;
   }
-  // Audit and branches are overseer-only (super admin / developer)
-  if ((page === "audit" || page === "branches") && !isOverseer(currentUser.role)) {
+  // Administrative oversight (Super Admin, Developer, Admin, Admin Pharmacist)
+  const isAdministrative = isOverseer(currentUser.role) || currentUser.role === "admin" || currentUser.role === "admin_pharmacist";
+  if ((page === "audit" || page === "branches") && !isAdministrative) {
     setPage(getRoleHome(currentUser.role));
     return null;
   }
-  // Branches tab / multi-branch tools are Full roster (option 4) or Option 5 with super admin
+  // Branches tab / multi-branch tools require multiBranch plan allowance
   if (page === "branches" && !planAllowsMultiBranch(staffPlan, customStaffPlanLimits)) {
     setPage(getRoleHome(currentUser.role));
     return null;
   }
-  // Users is admin/overseer only; Settings is open to staff too (branch payment settings)
-  if (page === "users" && currentUser.role !== "admin" && currentUser.role !== "admin_pharmacist" && !isOverseer(currentUser.role)) {
+  // Users is administrative oversight only
+  if (page === "users" && !isAdministrative) {
     setPage(getRoleHome(currentUser.role));
     return null;
   }
@@ -114,6 +115,12 @@ const Inner: React.FC = () => {
             if (canAccessPage(currentUser?.role, "visitTrail")) {
               setFocusedUhid(uhid);
               setPage("visitTrail");
+            }
+          }}
+          onNavigateToBilling={(pId) => {
+            if (canAccessPage(currentUser?.role, "billing")) {
+              setFocusedPatientId(pId);
+              setPage("billing");
             }
           }}
         />
@@ -184,6 +191,7 @@ const Inner: React.FC = () => {
           initialUhid={focusedUhid || undefined}
           onNavigateToBilling={(pId) => {
             if (canAccessPage(currentUser?.role, "billing")) {
+              setFocusedPatientId(pId);
               setPage("billing");
             }
           }}
@@ -194,7 +202,7 @@ const Inner: React.FC = () => {
       content = <Dashboard setPage={setPage} onOpenInvoice={openInvoice} onOpenInventory={openInventory} />;
       break;
     case "billing":
-      content = <Billing />;
+      content = <Billing initialPatientId={focusedPatientId || undefined} />;
       break;
     case "invoices":
       content = <Invoices focusId={invoiceFocus} onConsumeFocus={() => setInvoiceFocus(null)} />;

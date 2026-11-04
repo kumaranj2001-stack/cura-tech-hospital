@@ -8,7 +8,7 @@ import type { Doctor, Invoice, InvoiceItem, Medicine, Patient } from "../store/t
 import { minStockOf } from "../store/types";
 import InvoicePrint from "../components/InvoicePrint";
 
-const Billing: React.FC = () => {
+const Billing: React.FC<{ initialPatientId?: string }> = ({ initialPatientId }) => {
   const { data, setData, currentUser, log, payment, branchPayments, currentBranch, flags } = useStore();
   // UPI settings are branch-scoped: this branch's config, falling back to legacy global
   const paymentCfg = branchPayments[currentBranch?.id || currentUser?.branchId || "br_main"] || payment || {};
@@ -18,7 +18,18 @@ const Billing: React.FC = () => {
   const [items, setItems] = useState<InvoiceItem[]>([]);
   const [patientName, setPatientName] = useState("");
   const [patientPhone, setPatientPhone] = useState("");
-  const [patientId, setPatientId] = useState<string | undefined>();
+  const [patientId, setPatientId] = useState<string | undefined>(initialPatientId);
+
+  React.useEffect(() => {
+    if (initialPatientId && data.patients.length > 0) {
+      const p = data.patients.find((x) => x.id === initialPatientId);
+      if (p) {
+        setPatientId(p.id);
+        setPatientName(p.name);
+        setPatientPhone(p.phone);
+      }
+    }
+  }, [initialPatientId, data.patients]);
   const [discountType, setDiscountType] = useState<"fixed" | "percent">("percent");
   const [discountValue, setDiscountValue] = useState(0);
   const [warning, setWarning] = useState("");

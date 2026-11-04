@@ -28,7 +28,8 @@ export const Reception: React.FC<{
   onNavigateToDoctor?: (patientId: string) => void;
   onNavigateToNurse?: (patientId: string) => void;
   onNavigateToVisitTrail?: (uhid: string) => void;
-}> = ({ onNavigateToDoctor, onNavigateToNurse, onNavigateToVisitTrail }) => {
+  onNavigateToBilling?: (patientId?: string) => void;
+}> = ({ onNavigateToDoctor, onNavigateToNurse, onNavigateToVisitTrail, onNavigateToBilling }) => {
   const { data, setData, currentUser, currentBranch, log } = useStore();
   const branchId = currentBranch?.id || currentUser?.branchId || "br_main";
 
@@ -517,6 +518,17 @@ export const Reception: React.FC<{
                               </button>
                             )}
 
+                            {onNavigateToBilling && (
+                              <button
+                                onClick={() => onNavigateToBilling(apt.patientId)}
+                                className="px-2 py-1 text-xs rounded-md bg-emerald-100 text-emerald-800 hover:bg-emerald-200 dark:bg-emerald-900/50 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-700 flex items-center gap-1 font-medium"
+                                title="Generate Patient Invoice & Process Billing"
+                              >
+                                <CreditCard className="w-3.5 h-3.5" />
+                                Bill
+                              </button>
+                            )}
+
                             {onNavigateToVisitTrail && apt.patientUhid && (
                               <button
                                 onClick={() => onNavigateToVisitTrail(apt.patientUhid!)}
@@ -634,6 +646,19 @@ export const Reception: React.FC<{
                               <Calendar className="w-3.5 h-3.5 mr-1" />
                               Book
                             </Button>
+
+                            {onNavigateToBilling && (
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                className="text-xs h-7 px-2 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800"
+                                onClick={() => onNavigateToBilling(p.id)}
+                                title="Generate Patient Invoice & Process Billing"
+                              >
+                                <CreditCard className="w-3.5 h-3.5 mr-1" />
+                                Invoice
+                              </Button>
+                            )}
                           </div>
                         </td>
                       </tr>

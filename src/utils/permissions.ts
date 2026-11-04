@@ -47,12 +47,12 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissionConfig> = {
     badge: "🩺 Doctor",
     badgeClass: "bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800",
     defaultHome: "doctorDashboard",
-    allowedPages: ["doctorDashboard", "visitTrail", "patients", "doctors", "privacy"],
+    allowedPages: ["doctorDashboard", "visitTrail", "patients", "doctors", "diagnosticLab", "privacy"],
     canViewFinancials: false,
     canManageInventory: false,
     canRecordVitals: false,
     canWriteConsultations: true,
-    canAccessLab: false,
+    canAccessLab: true,
   },
 
   // Nursing Staff: Interacts solely with vitals tracking and care plans
@@ -70,15 +70,15 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissionConfig> = {
     canAccessLab: false,
   },
 
-  // Receptionists: Restricted to scheduling, appointment management, and patient registration
-  // Completely omits clinical notes, inventory, and management
+  // Receptionists: Front-desk operations and revenue cycle management
+  // Register patients, demographic updates, appointments, admissions, discharges, invoices, and payments
   receptionist: {
     label: "Medical Receptionist (Front Desk)",
     badge: "🏢 Receptionist",
     badgeClass: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800",
     defaultHome: "reception",
-    allowedPages: ["reception", "patients", "doctors", "visitTrail", "privacy"],
-    canViewFinancials: false,
+    allowedPages: ["reception", "billing", "invoices", "patients", "doctors", "visitTrail", "privacy"],
+    canViewFinancials: true,
     canManageInventory: false,
     canRecordVitals: false,
     canWriteConsultations: false,
@@ -133,7 +133,9 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissionConfig> = {
       "returns",
       "suppliers",
       "reports",
+      "audit",
       "users",
+      "branches",
       "settings",
       "privacy",
     ],
@@ -231,7 +233,9 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissionConfig> = {
       "returns",
       "suppliers",
       "reports",
+      "audit",
       "users",
+      "branches",
       "settings",
       "privacy",
     ],
