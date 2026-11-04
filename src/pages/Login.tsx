@@ -184,62 +184,7 @@ const Login: React.FC = () => {
               </Button>
             </form>
 
-            {/* Quick Demo Role Logins */}
-            <div className="mt-5 pt-4 border-t border-slate-100 dark:border-slate-700/60">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-2">
-                Quick Hospital Role Logins:
-              </span>
-              <div className="grid grid-cols-3 gap-1.5 text-xs">
-                <button
-                  type="button"
-                  onClick={() => { setU("kumaran"); setP("kumaranjkms"); }}
-                  className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-sky-50 dark:hover:bg-slate-700 text-left transition-colors"
-                >
-                  <div className="font-semibold text-sky-600 dark:text-sky-400">Admin</div>
-                  <div className="text-[10px] text-slate-400 truncate">kumaran</div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { setU("dr.arvind"); setP("doctor123"); }}
-                  className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-indigo-50 dark:hover:bg-slate-700 text-left transition-colors"
-                >
-                  <div className="font-semibold text-indigo-600 dark:text-indigo-400">Doctor</div>
-                  <div className="text-[10px] text-slate-400 truncate">dr.arvind</div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { setU("nurse.sarah"); setP("nurse123"); }}
-                  className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-teal-50 dark:hover:bg-slate-700 text-left transition-colors"
-                >
-                  <div className="font-semibold text-teal-600 dark:text-teal-400">Nurse</div>
-                  <div className="text-[10px] text-slate-400 truncate">nurse.sarah</div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { setU("reception"); setP("frontdesk123"); }}
-                  className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-emerald-50 dark:hover:bg-slate-700 text-left transition-colors"
-                >
-                  <div className="font-semibold text-emerald-600 dark:text-emerald-400">Reception</div>
-                  <div className="text-[10px] text-slate-400 truncate">reception</div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { setU("lab.tech"); setP("lab123"); }}
-                  className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-violet-50 dark:hover:bg-slate-700 text-left transition-colors"
-                >
-                  <div className="font-semibold text-violet-600 dark:text-violet-400">Lab Tech</div>
-                  <div className="text-[10px] text-slate-400 truncate">lab.tech</div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { setU("pharmacist"); setP("pharma123"); }}
-                  className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-amber-50 dark:hover:bg-slate-700 text-left transition-colors"
-                >
-                  <div className="font-semibold text-amber-600 dark:text-amber-400">Pharmacy</div>
-                  <div className="text-[10px] text-slate-400 truncate">pharmacist</div>
-                </button>
-              </div>
-            </div>
+
           </div>
 
           <p className="text-center text-xs text-slate-400 dark:text-slate-500 mt-5 rise rise-3">
