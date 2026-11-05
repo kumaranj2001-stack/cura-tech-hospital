@@ -33,20 +33,33 @@ export const NursingStation: React.FC<{
 
   const patients = data.patients || [];
   const appointments = data.appointments || [];
+  const admissions = data.admissions || [];
   const vitalsList = data.vitals || [];
   const carePlans = data.carePlans || [];
 
   const [activeTab, setActiveTab] = useState<"vitals" | "careplans" | "history">("vitals");
+  const [nurseQueueTab, setNurseQueueTab] = useState<"all" | "ipd" | "opd">("all");
   const [searchQuery, setSearchQuery] = useState("");
+
+  // Inpatients
+  const activeInpatients = useMemo(() => admissions.filter((a) => a.status === "admitted"), [admissions]);
 
   // Patient Selection
   const [selectedPatientId, setSelectedPatientId] = useState<string>(() => {
     if (initialPatientId) return initialPatientId;
     const waiting = appointments.find((a) => a.status === "checked_in" || a.status === "with_nurse");
-    return waiting ? waiting.patientId : patients[0]?.id || "";
+    if (waiting) return waiting.patientId;
+    if (activeInpatients.length > 0) return activeInpatients[0].patientId;
+    return patients[0]?.id || "";
   });
 
   const selectedPatient = patients.find((p) => p.id === selectedPatientId);
+
+  // Active admission for this selected patient if currently an inpatient
+  const activeAdmission = useMemo(() => {
+    if (!selectedPatient) return null;
+    return activeInpatients.find((a) => a.patientId === selectedPatient.id) || null;
+  }, [activeInpatients, selectedPatient]);
 
   // Vitals Form State
   const [systolic, setSystolic] = useState("");
@@ -186,6 +199,7 @@ export const NursingStation: React.FC<{
       heightCm: heightCm ? parseFloat(heightCm) : undefined,
       bmi: bmiCalculated ? parseFloat(bmiCalculated.val) : undefined,
       painScore: parseInt(painScore, 10) || 0,
+      admissionId: activeAdmission?.id,
       alerts,
       notes: vitalsNotes.trim(),
     };
@@ -202,7 +216,7 @@ export const NursingStation: React.FC<{
           branchId,
           user: currentUser?.username || "Nursing",
           action: "VITALS_RECORDED",
-          details: `Recorded vitals for ${selectedPatient.name} (${selectedPatient.uhid}): BP ${systolic}/${diastolic}, SpO2 ${spO2}%`,
+          details: `Recorded vitals for ${selectedPatient.name} (${selectedPatient.uhid})${activeAdmission ? ` [${activeAdmission.ward} Bed ${activeAdmission.bedNumber}]` : ""}: BP ${systolic}/${diastolic}, SpO2 ${spO2}%`,
           timestamp: new Date().toISOString(),
         },
         ...prev.audit,
@@ -224,6 +238,7 @@ export const NursingStation: React.FC<{
       patientId: selectedPatient.id,
       patientName: selectedPatient.name,
       patientUhid: selectedPatient.uhid,
+      admissionId: activeAdmission?.id,
       nurseName: currentUser?.name || "Nursing Staff",
       date: new Date().toISOString().slice(0, 10),
       shift,
@@ -288,48 +303,131 @@ export const NursingStation: React.FC<{
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* LEFT COLUMN: Waiting Patients Queue */}
+        {/* LEFT COLUMN: Patient Queue & Inpatients Filter */}
         <div className="lg:col-span-1 space-y-4">
           <Card>
-            <CardHeader className="py-3 px-4">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-                <Clock className="w-3.5 h-3.5 text-teal-600" />
-                Awaiting Vitals ({waitingPatients.length})
-              </span>
+            <CardHeader className="py-2.5 px-3">
+              <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl w-full">
+                <button
+                  type="button"
+                  onClick={() => setNurseQueueTab("all")}
+                  className={`flex-1 py-1 text-[11px] font-semibold rounded-lg transition-all ${
+                    nurseQueueTab === "all"
+                      ? "bg-white dark:bg-slate-700 text-teal-700 dark:text-teal-300 shadow-sm"
+                      : "text-slate-600 dark:text-slate-400"
+                  }`}
+                >
+                  All ({waitingPatients.length + activeInpatients.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setNurseQueueTab("ipd")}
+                  className={`flex-1 py-1 text-[11px] font-semibold rounded-lg transition-all flex items-center justify-center gap-1 ${
+                    nurseQueueTab === "ipd"
+                      ? "bg-white dark:bg-slate-700 text-indigo-700 dark:text-indigo-300 shadow-sm"
+                      : "text-slate-600 dark:text-slate-400"
+                  }`}
+                >
+                  <Bed className="w-3 h-3" />
+                  IPD ({activeInpatients.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setNurseQueueTab("opd")}
+                  className={`flex-1 py-1 text-[11px] font-semibold rounded-lg transition-all flex items-center justify-center gap-1 ${
+                    nurseQueueTab === "opd"
+                      ? "bg-white dark:bg-slate-700 text-sky-700 dark:text-sky-300 shadow-sm"
+                      : "text-slate-600 dark:text-slate-400"
+                  }`}
+                >
+                  <Clock className="w-3 h-3" />
+                  OPD ({waitingPatients.length})
+                </button>
+              </div>
             </CardHeader>
             <CardBody className="p-2 space-y-1.5 max-h-[500px] overflow-y-auto">
-              {waitingPatients.length === 0 ? (
-                <div className="text-center py-6 text-xs text-slate-400">
-                  No patients waiting in queue right now.
+              {/* Inpatients Section */}
+              {(nurseQueueTab === "all" || nurseQueueTab === "ipd") && activeInpatients.length > 0 && (
+                <div className="space-y-1 mb-2">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 px-1 flex items-center gap-1">
+                    <Bed className="w-3 h-3" /> Admitted Inpatients
+                  </div>
+                  {activeInpatients.map((adm) => {
+                    const isSelected = adm.patientId === selectedPatientId;
+                    return (
+                      <button
+                        key={adm.id}
+                        type="button"
+                        onClick={() => setSelectedPatientId(adm.patientId)}
+                        className={`w-full text-left p-2.5 rounded-xl border transition-all ${
+                          isSelected
+                            ? "bg-indigo-50 dark:bg-indigo-950/50 border-indigo-300 dark:border-indigo-800 shadow-sm"
+                            : "bg-white dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 hover:border-slate-300"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-mono font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-100 dark:bg-indigo-900/60 px-1.5 py-0.2 rounded">
+                            {adm.bedNumber}
+                          </span>
+                          <span className="text-[10px] text-slate-500">{adm.ward}</span>
+                        </div>
+                        <div className="font-semibold text-slate-800 dark:text-slate-100 text-sm mt-0.5">
+                          {adm.patientName}
+                        </div>
+                        <div className="text-[11px] font-mono text-slate-400">
+                          {adm.admissionNumber} · Dr. {adm.doctorName.split(" ").slice(-1)[0]}
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
-              ) : (
-                waitingPatients.map((apt) => {
-                  const isSelected = apt.patientId === selectedPatientId;
-                  return (
-                    <button
-                      key={apt.id}
-                      onClick={() => setSelectedPatientId(apt.patientId)}
-                      className={`w-full text-left p-2.5 rounded-xl border transition-all ${
-                        isSelected
-                          ? "bg-teal-50 dark:bg-teal-950/50 border-teal-300 dark:border-teal-800 shadow-sm"
-                          : "bg-white dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 hover:border-slate-300"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-mono font-bold text-teal-600 dark:text-teal-400">
-                          T-{apt.tokenNumber}
-                        </span>
-                        <span className="text-[10px] text-slate-400">{apt.timeSlot}</span>
+              )}
+
+              {/* OPD Waiting Patients Section */}
+              {(nurseQueueTab === "all" || nurseQueueTab === "opd") && (
+                <div className="space-y-1">
+                  {nurseQueueTab === "all" && activeInpatients.length > 0 && (
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-sky-600 dark:text-sky-400 px-1 flex items-center gap-1 mt-2">
+                      <Clock className="w-3 h-3" /> OPD Queue
+                    </div>
+                  )}
+                  {waitingPatients.length === 0 ? (
+                    nurseQueueTab === "opd" && (
+                      <div className="text-center py-6 text-xs text-slate-400">
+                        No OPD patients waiting in queue right now.
                       </div>
-                      <div className="font-semibold text-slate-800 dark:text-slate-100 text-sm mt-0.5">
-                        {apt.patientName}
-                      </div>
-                      <div className="text-[11px] font-mono text-slate-400">
-                        {apt.patientUhid || "NO-UHID"} · Dr. {apt.doctorName.split(" ").slice(-1)[0]}
-                      </div>
-                    </button>
-                  );
-                })
+                    )
+                  ) : (
+                    waitingPatients.map((apt) => {
+                      const isSelected = apt.patientId === selectedPatientId;
+                      return (
+                        <button
+                          key={apt.id}
+                          type="button"
+                          onClick={() => setSelectedPatientId(apt.patientId)}
+                          className={`w-full text-left p-2.5 rounded-xl border transition-all ${
+                            isSelected
+                              ? "bg-teal-50 dark:bg-teal-950/50 border-teal-300 dark:border-teal-800 shadow-sm"
+                              : "bg-white dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 hover:border-slate-300"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-mono font-bold text-teal-600 dark:text-teal-400">
+                              T-{apt.tokenNumber}
+                            </span>
+                            <span className="text-[10px] text-slate-400">{apt.timeSlot}</span>
+                          </div>
+                          <div className="font-semibold text-slate-800 dark:text-slate-100 text-sm mt-0.5">
+                            {apt.patientName}
+                          </div>
+                          <div className="text-[11px] font-mono text-slate-400">
+                            {apt.patientUhid || "NO-UHID"} · Dr. {apt.doctorName.split(" ").slice(-1)[0]}
+                          </div>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
               )}
 
               <div className="pt-3 border-t border-slate-200 dark:border-slate-700">
@@ -361,11 +459,21 @@ export const NursingStation: React.FC<{
                     {selectedPatient.name.charAt(0)}
                   </div>
                   <div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-bold text-slate-800 dark:text-slate-100 text-base">{selectedPatient.name}</span>
                       <span className="font-mono text-xs bg-teal-50 dark:bg-teal-950 text-teal-700 dark:text-teal-300 px-2 py-0.5 rounded font-semibold border border-teal-200 dark:border-teal-800">
                         {selectedPatient.uhid || "CURA-2026-PENDING"}
                       </span>
+                      {activeAdmission ? (
+                        <span className="font-semibold text-xs bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 px-2 py-0.5 rounded border border-indigo-200 dark:border-indigo-800 flex items-center gap-1">
+                          <Bed className="w-3.5 h-3.5 text-indigo-500" />
+                          {activeAdmission.ward} · Bed {activeAdmission.bedNumber}
+                        </span>
+                      ) : (
+                        <span className="text-xs bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 px-2 py-0.5 rounded">
+                          Outpatient (OPD)
+                        </span>
+                      )}
                     </div>
                     <div className="text-xs text-slate-400 mt-0.5">
                       {selectedPatient.age ? `${selectedPatient.age} yrs` : "Age —"} · {selectedPatient.gender || "—"} · Blood: <b>{selectedPatient.bloodGroup || "—"}</b> · Ph: {selectedPatient.phone}

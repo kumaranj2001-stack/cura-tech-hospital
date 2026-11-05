@@ -27,6 +27,7 @@ export const COLLECTIONS = {
   audit: "gp_audit",
   meta: "gp_meta",
   appointments: "gp_appointments",
+  admissions: "gp_admissions",
   vitals: "gp_vitals",
   carePlans: "gp_care_plans",
   consultations: "gp_consultations",

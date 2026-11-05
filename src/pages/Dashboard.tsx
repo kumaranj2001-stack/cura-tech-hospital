@@ -130,6 +130,7 @@ const Dashboard: React.FC<{
     return { todays, todaySales, totalSales, monthSales, monthInvoices, lowStock, outStock, expired, exp30, exp60, exp90, totalStockValue, days7, months6 };
   }, [data]);
 
+  const activeInpatients = useMemo(() => (data.admissions || []).filter((a) => a.status === "admitted"), [data.admissions]);
   const pendingGRNs = useMemo(() => data.grns.filter((g) => g.status === "pending"), [data.grns]);
 
   const chartDays = useMemo(
@@ -302,7 +303,7 @@ const Dashboard: React.FC<{
             >
               <div className="text-xl mb-1">🏢</div>
               <div className="text-xs font-bold text-white">Reception</div>
-              <div className="text-[10px] text-sky-300">UHID & Tokens</div>
+              <div className="text-[10px] text-sky-300">OPD & IPD Beds</div>
             </button>
           )}
 
@@ -370,11 +371,13 @@ const Dashboard: React.FC<{
             <StatCard label="Today's Sales" amount={stats.todaySales} format="currency" icon="💰" chip="bg-emerald-50 text-emerald-600" ring="group-hover:ring-emerald-300" sub={`${stats.todays.length} invoices`} onClick={() => setDetail("today")} />
             <StatCard label="Total Sales" amount={stats.totalSales} format="currency" icon="🧾" chip="bg-sky-50 text-sky-600" ring="group-hover:ring-sky-300" sub={`${data.invoices.length} invoices`} onClick={() => setDetail("totalSales")} />
             <StatCard label="This Month" amount={stats.monthSales} format="currency" icon="📈" chip="bg-teal-50 text-teal-600" ring="group-hover:ring-teal-300" sub={`${stats.monthInvoices.length} invoices`} onClick={() => setDetail("month")} />
+            <StatCard label="Active Inpatients" amount={activeInpatients.length} icon="🛏️" chip="bg-indigo-50 text-indigo-600" ring="group-hover:ring-indigo-300" sub="admitted to wards" onClick={() => setPage("reception")} />
             <StatCard label="Stock Value" amount={stats.totalStockValue} format="currency" icon="💊" chip="bg-violet-50 text-violet-600" ring="group-hover:ring-violet-300" sub={`${data.medicines.length} medicines`} onClick={() => setDetail("stockValue")} />
           </>
         ) : (
           <>
             <StatCard label="Today's Appointments" amount={(data.appointments || []).filter(a => a.date === today()).length} icon="📅" chip="bg-indigo-50 text-indigo-600" ring="group-hover:ring-indigo-300" sub="scheduled OPD visits" onClick={() => setPage("reception")} />
+            <StatCard label="Active Inpatients" amount={activeInpatients.length} icon="🛏️" chip="bg-indigo-50 text-indigo-600" ring="group-hover:ring-indigo-300" sub="admitted to wards" onClick={() => setPage("reception")} />
             <StatCard label="Registered Patients" amount={(data.patients || []).length} icon="👥" chip="bg-sky-50 text-sky-600" ring="group-hover:ring-sky-300" sub="active digital UHIDs" onClick={() => setPage("patients")} />
             <StatCard label="Consultations Logged" amount={(data.consultations || []).length} icon="🩺" chip="bg-teal-50 text-teal-600" ring="group-hover:ring-teal-300" sub="EHR encounter notes" onClick={() => setPage("visitTrail")} />
             <StatCard label="Lab Tests Pending" amount={(data.labOrders || []).filter(l => l.status === "ordered" || l.status === "sample_collected").length} icon="🔬" chip="bg-violet-50 text-violet-600" ring="group-hover:ring-violet-300" sub="awaiting analysis" onClick={() => setPage("visitTrail")} />

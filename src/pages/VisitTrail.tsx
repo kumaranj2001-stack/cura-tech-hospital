@@ -21,6 +21,7 @@ import {
   Calendar,
   AlertTriangle,
   Building2,
+  Bed,
 } from "lucide-react";
 
 export const VisitTrail: React.FC<{
@@ -78,6 +79,12 @@ export const VisitTrail: React.FC<{
     if (!activePatient) return [];
     return carePlans.filter((cp) => cp.patientId === activePatient.id);
   }, [carePlans, activePatient]);
+
+  const admissions = data.admissions || [];
+  const patientAdmissions = useMemo(() => {
+    if (!activePatient) return [];
+    return admissions.filter((a) => a.patientId === activePatient.id);
+  }, [admissions, activePatient]);
 
   // Aggregate Total Financial Spent
   const totalFinancials = useMemo(() => {
@@ -339,6 +346,86 @@ export const VisitTrail: React.FC<{
               </CardBody>
             </Card>
           </div>
+
+          {/* ── INPATIENT HOSPITALIZATION & BED EPISODES (IF ADMITTED) ── */}
+          {patientAdmissions.length > 0 && (
+            <div className="relative pl-8 sm:pl-10 before:absolute before:left-3 sm:before:left-4 before:top-3 before:bottom-0 before:w-0.5 before:bg-indigo-300 dark:before:bg-indigo-800">
+              <div className="absolute left-0 top-1 w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-indigo-700 text-white flex items-center justify-center font-bold text-xs shadow-md">
+                <Bed className="w-3.5 h-3.5" />
+              </div>
+
+              <Card className="border-indigo-200 dark:border-indigo-900 shadow-sm">
+                <CardHeader className="py-2.5 px-4 bg-indigo-50/70 dark:bg-indigo-950/50 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Bed className="w-4 h-4 text-indigo-600" />
+                    <span className="text-xs font-bold uppercase tracking-wider text-indigo-900 dark:text-indigo-200">
+                      Inpatient (IPD) Hospitalization & Bed Episode
+                    </span>
+                  </div>
+                  <span className="text-[11px] font-mono font-semibold text-indigo-700 dark:text-indigo-300">
+                    {patientAdmissions.length} Hospitalization{patientAdmissions.length > 1 ? "s" : ""}
+                  </span>
+                </CardHeader>
+                <CardBody className="p-4 text-xs space-y-3">
+                  {patientAdmissions.map((adm) => (
+                    <div key={adm.id} className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 space-y-2">
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-100 dark:bg-indigo-900/60 px-2 py-0.5 rounded text-xs">
+                            {adm.admissionNumber}
+                          </span>
+                          <span className="font-semibold text-slate-800 dark:text-slate-100">
+                            {adm.ward} · Bed {adm.bedNumber}
+                          </span>
+                          {adm.status === "admitted" ? (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                              Currently Admitted
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-700 border border-slate-300">
+                              Discharged ({adm.dischargeCondition || "Recovered"})
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-[11px] font-mono text-slate-400">
+                          Admitted: {fmtDateTime(adm.admittedAt)}
+                          {adm.dischargedAt && ` · Discharged: ${fmtDateTime(adm.dischargedAt)}`}
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-slate-600 dark:text-slate-300">
+                        <div>
+                          <span className="text-[10px] text-slate-400 uppercase block">Attending Physician</span>
+                          <span className="font-medium text-slate-800 dark:text-slate-100">{adm.doctorName} ({adm.department || "General"})</span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-slate-400 uppercase block">Provisional Diagnosis</span>
+                          <span className="font-medium text-slate-800 dark:text-slate-100">{adm.provisionalDiagnosis || "—"}</span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-slate-400 uppercase block">Bed Charges / Deposit</span>
+                          <span>₹{adm.dailyBedCharge || 1200}/day · Deposit: ₹{adm.initialDeposit || 0}</span>
+                        </div>
+                      </div>
+
+                      {adm.admissionReason && (
+                        <div className="text-[11px] text-slate-600 dark:text-slate-400">
+                          <b>Admission Reason:</b> {adm.admissionReason}
+                        </div>
+                      )}
+
+                      {adm.dischargeSummary && (
+                        <div className="p-2 rounded-lg bg-emerald-50/70 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/50 text-[11px] text-emerald-900 dark:text-emerald-200">
+                          <b>Discharge Advice & Summary:</b> {adm.dischargeSummary}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </CardBody>
+              </Card>
+            </div>
+          )}
 
           {/* ── STEP 4: DIAGNOSTIC LAB INVESTIGATIONS ── */}
           <div className="relative pl-8 sm:pl-10 before:absolute before:left-3 sm:before:left-4 before:top-3 before:bottom-0 before:w-0.5 before:bg-violet-200 dark:before:bg-violet-900">

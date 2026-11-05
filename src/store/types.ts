@@ -135,6 +135,50 @@ export interface Appointment {
   createdAt: string;
 }
 
+export type InpatientWard =
+  | "General Ward"
+  | "Semi-Private"
+  | "Private Deluxe"
+  | "ICU"
+  | "NICU"
+  | "Emergency / Trauma"
+  | "Day Care";
+
+export type AdmissionStatus = "admitted" | "discharged" | "transferred";
+
+export type DischargeCondition =
+  | "Recovered"
+  | "Clinically Stable"
+  | "Referred / Transferred"
+  | "LAMA (Left Against Medical Advice)";
+
+export interface InpatientAdmission {
+  id: string;
+  branchId?: string;
+  admissionNumber: string; // e.g. "IPD-1001"
+  patientId: string;
+  patientUhid?: string;
+  patientName: string;
+  patientPhone?: string;
+  patientAge?: number;
+  patientGender?: string;
+  doctorId: string;
+  doctorName: string;
+  department?: string;
+  ward: InpatientWard;
+  bedNumber: string; // e.g. "GW-04", "ICU-02"
+  admittedAt: string; // ISO string
+  admissionReason: string;
+  provisionalDiagnosis?: string;
+  dailyBedCharge?: number;
+  initialDeposit?: number;
+  status: AdmissionStatus;
+  dischargedAt?: string;
+  dischargeCondition?: DischargeCondition;
+  dischargeSummary?: string;
+  createdAt: string;
+}
+
 export interface PatientVitals {
   id: string;
   branchId?: string;
@@ -142,6 +186,7 @@ export interface PatientVitals {
   patientName: string;
   patientUhid?: string;
   appointmentId?: string;
+  admissionId?: string;
   recordedBy: string; // Nurse name
   recordedAt: string; // ISO string
   systolicBp?: number;
@@ -175,6 +220,7 @@ export interface CarePlan {
   patientId: string;
   patientName: string;
   patientUhid?: string;
+  admissionId?: string;
   nurseName: string;
   date: string;
   shift?: "Morning" | "Afternoon" | "Night";
@@ -435,8 +481,10 @@ export interface AppData {
     uhid?: number;
     appointment?: number;
     lab?: number;
+    admission?: number;
   };
   appointments: Appointment[];
+  admissions: InpatientAdmission[];
   vitals: PatientVitals[];
   carePlans: CarePlan[];
   consultations: Consultation[];

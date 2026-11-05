@@ -1160,6 +1160,109 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // ── INPATIENT ADMISSIONS ENDPOINTS (Stores to Firestore gp_admissions) ──
+  if (req.method === "GET" && url.pathname === "/api/admissions") {
+    try {
+      const snap = await getDocs(collection(db, COLLECTIONS.admissions));
+      const branchId = url.searchParams.get("branchId");
+      const status = url.searchParams.get("status");
+      let admissions = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      if (branchId) {
+        admissions = admissions.filter((a) => !a.branchId || a.branchId === branchId);
+      }
+      if (status) {
+        admissions = admissions.filter((a) => a.status === status);
+      }
+      return sendJson(res, 200, { success: true, count: admissions.length, admissions });
+    } catch (err) {
+      return sendJson(res, 500, { success: false, error: err.message });
+    }
+  }
+
+  if (req.method === "POST" && (url.pathname === "/api/admissions" || url.pathname === "/api/admissions/create")) {
+    let body = "";
+    req.on("data", (chunk) => { body += chunk; });
+    req.on("end", async () => {
+      try {
+        if (!body) return sendJson(res, 400, { success: false, error: "Empty request body" });
+        const payload = JSON.parse(body);
+        const a = payload.admission || payload;
+        const patientName = String(a.patientName || "").trim();
+        const ward = String(a.ward || "").trim();
+        const bedNumber = String(a.bedNumber || "").trim();
+        if (!patientName || !ward || !bedNumber) {
+          return sendJson(res, 400, { success: false, error: "Patient name, ward, and bed number are required" });
+        }
+        const id = a.id || `adm_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+        const cleanAdmission = {
+          id,
+          admissionNumber: a.admissionNumber || `IPD-${Math.floor(1000 + Math.random() * 9000)}`,
+          patientId: a.patientId || "",
+          patientUhid: a.patientUhid || "",
+          patientName,
+          patientPhone: a.patientPhone || "",
+          patientAge: a.patientAge ? Number(a.patientAge) : undefined,
+          patientGender: a.patientGender || "Male",
+          branchId: a.branchId || undefined,
+          doctorId: a.doctorId || "",
+          doctorName: a.doctorName || "",
+          department: a.department || "General Medicine",
+          ward,
+          bedNumber,
+          admittedAt: a.admittedAt || new Date().toISOString(),
+          admissionReason: a.admissionReason || "Inpatient Care",
+          provisionalDiagnosis: a.provisionalDiagnosis || "",
+          dailyBedCharge: a.dailyBedCharge ? Number(a.dailyBedCharge) : 1000,
+          initialDeposit: a.initialDeposit ? Number(a.initialDeposit) : 0,
+          status: a.status || "admitted",
+          dischargedAt: a.dischargedAt || undefined,
+          dischargeCondition: a.dischargeCondition || undefined,
+          dischargeSummary: a.dischargeSummary || undefined,
+          createdAt: a.createdAt || new Date().toISOString(),
+        };
+
+        const docData = {};
+        for (const [k, v] of Object.entries(cleanAdmission)) {
+          if (v !== undefined) docData[k] = v;
+        }
+
+        await setDoc(doc(db, COLLECTIONS.admissions, id), docData);
+        return sendJson(res, 201, { success: true, admission: cleanAdmission });
+      } catch (err) {
+        return sendJson(res, 500, { success: false, error: err.message });
+      }
+    });
+    return;
+  }
+
+  if ((req.method === "PUT" && url.pathname.startsWith("/api/admissions/")) || (req.method === "POST" && url.pathname === "/api/admissions/update")) {
+    let body = "";
+    req.on("data", (chunk) => { body += chunk; });
+    req.on("end", async () => {
+      try {
+        const payload = body ? JSON.parse(body) : {};
+        const urlId = url.pathname.startsWith("/api/admissions/") && url.pathname !== "/api/admissions/update"
+          ? url.pathname.replace("/api/admissions/", "")
+          : null;
+        const id = payload.id || urlId;
+        if (!id) return sendJson(res, 400, { success: false, error: "Admission ID required" });
+        const patch = payload.patch || payload;
+        delete patch.id;
+        const docRef = doc(db, COLLECTIONS.admissions, id);
+        const existing = await getDoc(docRef);
+        if (!existing.exists()) {
+          return sendJson(res, 404, { success: false, error: "Admission not found" });
+        }
+        const updated = { ...existing.data(), ...patch, id };
+        await setDoc(docRef, updated, { merge: true });
+        return sendJson(res, 200, { success: true, admission: updated });
+      } catch (err) {
+        return sendJson(res, 500, { success: false, error: err.message });
+      }
+    });
+    return;
+  }
+
   // ── SUPPLIERS ENDPOINTS (Stores to Firestore gp_suppliers) ──
   if (req.method === "GET" && url.pathname === "/api/suppliers") {
     try {

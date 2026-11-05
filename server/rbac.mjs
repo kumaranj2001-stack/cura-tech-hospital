@@ -88,6 +88,11 @@ export function isRoleAuthorized(role, method, pathname) {
       return true;
     }
 
+    // Inpatient admissions, bed assignment, transfers and discharge
+    if (path === "/api/admissions" || path === "/api/admissions/create" || path.startsWith("/api/admissions/")) {
+      return m === "GET" || m === "POST" || m === "PUT";
+    }
+
     // Invoice generation, payment processing, billing calculations
     if (path === "/api/invoices" || path === "/api/invoices/create") {
       return m === "GET" || m === "POST";
@@ -116,6 +121,11 @@ export function isRoleAuthorized(role, method, pathname) {
       return m === "GET";
     }
 
+    // Inpatient list and bed monitoring
+    if (path === "/api/admissions" || (path.startsWith("/api/admissions/") && m === "GET")) {
+      return m === "GET";
+    }
+
     // Doctor directory (view attending physicians)
     if (path === "/api/doctors" || path === "/api/doctors/list" || path === "/api/doctors/filter") {
       return m === "GET" || m === "POST";
@@ -139,6 +149,11 @@ export function isRoleAuthorized(role, method, pathname) {
     // Patient medical histories, consultations & updates
     if (path === "/api/patients" || path.startsWith("/api/patients/")) {
       return m === "GET" || m === "PUT" || (path === "/api/patients" && m === "GET");
+    }
+
+    // Inpatient rounds, admission orders and discharge advice
+    if (path === "/api/admissions" || path.startsWith("/api/admissions/")) {
+      return m === "GET" || m === "POST" || m === "PUT";
     }
 
     // Doctor directory
