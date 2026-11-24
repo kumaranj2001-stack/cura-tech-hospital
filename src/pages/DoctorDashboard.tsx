@@ -4,6 +4,7 @@ import { Card, CardHeader, CardBody, Button, Input, Label, Select, Modal, Badge 
 import { fmtDate, fmtDateTime, flashToast } from "../utils/helpers";
 import { getPrescriptionQrUrl } from "../utils/uhidGenerator";
 import { LAB_CATALOG } from "../utils/labCatalog";
+import realtimeSync from "../services/realtime";
 import type {
   Consultation,
   PrescribedMedicine,
@@ -139,6 +140,16 @@ export const DoctorDashboard: React.FC<{
   // Print Prescription Modal
   const [printModalOpen, setPrintModalOpen] = useState(false);
   const [lastSavedConsultation, setLastSavedConsultation] = useState<Consultation | null>(null);
+
+  // Live Real-Time Clinical Alerts received from Nursing Terminal via WebSocket
+  const [liveAlerts, setLiveAlerts] = useState<any[]>([]);
+
+  useEffect(() => {
+    const unsub = realtimeSync.subscribeAlerts((alerts) => {
+      setLiveAlerts(alerts);
+    });
+    return unsub;
+  }, []);
 
   // Common quick symptoms
   const COMMON_SYMPTOMS = [
@@ -313,7 +324,36 @@ export const DoctorDashboard: React.FC<{
     }));
 
     log("E_PRESCRIPTION_SIGNED", `e-Rx signed for ${activePatient.name}`);
-    flashToast(`e-Prescription signed! Transmitted to Pharmacy & Lab.`);
+
+    // Real-time synchronization: Dispatch to Diagnostic Lab queue
+    orderedLabTests.forEach((tName) => {
+      realtimeSync.initiateLabRequest({
+        patientId: activePatient.id,
+        patientName: activePatient.name,
+        patientUhid: activePatient.uhid,
+        testName: tName,
+        priority: "Routine",
+        doctorName: activeDoctor.name,
+      });
+    });
+
+    // Real-time synchronization: Dispatch e-Prescription to Central Pharmacy
+    if (rxList.length > 0) {
+      realtimeSync.initiatePharmacyRequest({
+        patientId: activePatient.id,
+        patientName: activePatient.name,
+        patientUhid: activePatient.uhid,
+        medicines: rxList.map((m) => ({
+          name: m.name,
+          dosage: m.dosage,
+          days: parseInt(m.duration, 10) || 5,
+          qty: m.quantity || 10,
+        })),
+        doctorName: activeDoctor.name,
+      });
+    }
+
+    flashToast(`e-Prescription signed! Real-time sync initiated with Pharmacy & Lab.`);
 
     setLastSavedConsultation(newConsultation);
     setPrintModalOpen(true);
@@ -386,6 +426,54 @@ export const DoctorDashboard: React.FC<{
 
   return (
     <div className="space-y-6">
+      {/* Live Real-Time Clinical Alerts Ticker from Nursing Stations */}
+      {liveAlerts.length > 0 && (
+        <div className="space-y-2">
+          {liveAlerts.slice(0, 3).map((alt) => (
+            <div
+              key={alt.id}
+              className="p-3.5 rounded-xl border border-rose-300 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/60 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs animate-in slide-in-from-top-2 duration-200"
+            >
+              <div className="flex items-start gap-2.5">
+                <span className="p-1.5 rounded-lg bg-rose-600 text-white animate-pulse shrink-0">
+                  <AlertTriangle className="w-4 h-4" />
+                </span>
+                <div>
+                  <div className="font-extrabold text-rose-900 dark:text-rose-100 flex items-center gap-2">
+                    <span>{alt.title}</span>
+                    <Badge variant="danger" className="text-[10px]">REAL-TIME</Badge>
+                  </div>
+                  <div className="text-rose-700 dark:text-rose-300 text-[11px] mt-0.5">
+                    {alt.message} • Recorded by {alt.recordedBy} ({new Date(alt.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })})
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                {alt.patientId && (
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      setSelectedPatientId(alt.patientId);
+                      flashToast(`Focused on patient ${alt.patientName} EHR`);
+                    }}
+                    className="text-xs bg-rose-600 hover:bg-rose-700 text-white"
+                  >
+                    View Patient EHR
+                  </Button>
+                )}
+                <button
+                  onClick={() => realtimeSync.dismissAlert(alt.id)}
+                  className="text-rose-500 hover:text-rose-700 font-semibold px-2 py-1"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Top Banner & Doctor Profile Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-gradient-to-r from-indigo-900 via-sky-900 to-slate-900 text-white p-6 rounded-2xl shadow-lg border border-sky-800/40">
         <div className="space-y-1">

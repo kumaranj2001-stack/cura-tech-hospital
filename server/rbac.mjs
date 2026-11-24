@@ -40,6 +40,9 @@ export function isPublicPath(pathname) {
     pathname === "/" ||
     pathname === "/api/health" ||
     pathname === "/api/firebase/status" ||
+    pathname === "/api/realtime/status" ||
+    pathname === "/ws" ||
+    pathname === "/api/ws" ||
     pathname.startsWith("/api/auth/")
   ) {
     return true;

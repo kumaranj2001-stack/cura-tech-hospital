@@ -9,6 +9,7 @@ import { listUsers, createUser, updateUser, deleteUser, validateUserPayload, san
 import { db, COLLECTIONS, firebaseConfig } from "./firebase.mjs";
 import { collection, doc, getDoc, getDocs, setDoc, deleteDoc } from "firebase/firestore";
 import { enforceRbac } from "./rbac.mjs";
+import { setupWebSocketServer, getConnectedClientsSummary, broadcast } from "./websocket.mjs";
 
 const PORT = process.env.PORT || 3001;
 
@@ -1585,12 +1586,26 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
+  // ── REAL-TIME WEBSOCKET STATUS & CLINICAL BROADCAST ENDPOINT ──
+  if (req.method === "GET" && url.pathname === "/api/realtime/status") {
+    return sendJson(res, 200, {
+      success: true,
+      service: "Cura-Tech Real-Time WebSocket Synchronization Bus",
+      ...getConnectedClientsSummary(),
+      timestamp: new Date().toISOString(),
+    });
+  }
+
   // Not found
   sendJson(res, 404, { success: false, error: `Route not found: ${req.method} ${url.pathname}` });
 });
 
+// Attach bidirectional WebSocket real-time synchronization server
+setupWebSocketServer(server);
+
 server.listen(PORT, () => {
-  console.log(`[GRN Parser Backend] Server running on http://localhost:${PORT}`);
-  console.log(`[GRN Parser Backend] Health check: http://localhost:${PORT}/api/health`);
-  console.log(`[GRN Parser Backend] Parse endpoint: http://localhost:${PORT}/api/parse-invoice`);
+  console.log(`[Cura-Tech Backend] Server running on http://localhost:${PORT}`);
+  console.log(`[Cura-Tech Backend] Real-time WebSocket: ws://localhost:${PORT}/ws`);
+  console.log(`[Cura-Tech Backend] Health check: http://localhost:${PORT}/api/health`);
+  console.log(`[Cura-Tech Backend] Real-time status: http://localhost:${PORT}/api/realtime/status`);
 });

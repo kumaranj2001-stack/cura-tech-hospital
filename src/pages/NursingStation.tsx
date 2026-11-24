@@ -3,6 +3,7 @@ import { useStore } from "../store/store";
 import { Card, CardHeader, CardBody, Button, Input, Label, Select, Badge } from "../components/ui";
 import { fmtDate, fmtDateTime, flashToast } from "../utils/helpers";
 import type { PatientVitals, CarePlan, CarePlanMedication, Patient } from "../store/types";
+import realtimeSync from "../services/realtime";
 import {
   HeartPulse,
   Activity,
@@ -223,8 +224,28 @@ export const NursingStation: React.FC<{
       ].slice(0, 1000),
     }));
 
+    // Real-time synchronization broadcast via WebSocket
+    realtimeSync.recordNurseVitals({
+      patientId: selectedPatient.id,
+      patientName: selectedPatient.name,
+      patientUhid: selectedPatient.uhid,
+      bedNumber: activeAdmission ? `${activeAdmission.ward} Bed ${activeAdmission.bedNumber}` : "OPD Ward",
+      vitals: {
+        bpSys: systolic ? parseInt(systolic, 10) : 120,
+        bpDia: diastolic ? parseInt(diastolic, 10) : 80,
+        spo2: spO2 ? parseInt(spO2, 10) : 98,
+        pulse: heartRate ? parseInt(heartRate, 10) : 72,
+        temp: temperature ? parseFloat(temperature) : 98.6,
+        rr: respiratoryRate ? parseInt(respiratoryRate, 10) : 16,
+        painScore: parseInt(painScore, 10) || 0,
+      },
+      nurseName: currentUser?.name || "Nursing Staff",
+      doctorId: apt?.doctorId || undefined,
+      doctorName: apt?.doctorName || undefined,
+    });
+
     log("VITALS_RECORDED", `Vitals logged for ${selectedPatient.name}`);
-    flashToast(`Vitals recorded for ${selectedPatient.name}! Synced with Doctor.`);
+    flashToast(`Vitals recorded for ${selectedPatient.name}! Live broadcast to Attending Physician.`);
   };
 
   // Handler: Save Care Plan
@@ -255,7 +276,23 @@ export const NursingStation: React.FC<{
       carePlans: [newCarePlan, ...(prev.carePlans || [])],
     }));
 
-    flashToast(`Care plan updated for ${selectedPatient.name}`);
+    // Real-time synchronization: Broadcast medication administration to Physician & Pharmacy
+    medsList.forEach((med) => {
+      if (med.status === "given") {
+        realtimeSync.administerMedication({
+          patientId: selectedPatient.id,
+          patientName: selectedPatient.name,
+          patientUhid: selectedPatient.uhid,
+          medication: med.medicineName,
+          dose: med.dosage,
+          route: med.route,
+          nurseName: med.administeredBy || currentUser?.name || "Nursing Staff",
+          requiresRefill: false,
+        });
+      }
+    });
+
+    flashToast(`Care plan & MAR updated for ${selectedPatient.name}! Synced in real-time.`);
   };
 
   const toggleIntervention = (item: string) => {

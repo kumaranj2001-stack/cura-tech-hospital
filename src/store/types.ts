@@ -995,3 +995,32 @@ export interface MaintenanceWorkOrder {
   cost?: number;
 }
 
+export interface ClinicalAlert {
+  id: string;
+  severity: "CRITICAL" | "WARNING" | "INFO";
+  title: string;
+  message: string;
+  patientId: string;
+  patientName: string;
+  patientUhid?: string;
+  bedNumber?: string;
+  recordedBy?: string;
+  targetDoctorId?: string | null;
+  targetDoctorName?: string | null;
+  vitals?: {
+    bpSys?: number;
+    bpDia?: number;
+    spo2?: number;
+    pulse?: number;
+    temp?: number;
+    rr?: number;
+  };
+  timestamp: string;
+  read?: boolean;
+}
+
+export interface RealtimeMessage {
+  type: string;
+  payload: any;
+}
+
