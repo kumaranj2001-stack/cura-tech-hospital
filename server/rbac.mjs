@@ -23,6 +23,13 @@ export const HOSPITAL_ROLES = {
   STAFF_PHARMACIST: "staff_pharmacist",
   PHARMACIST: "pharmacist",
   STAFF: "staff",
+  CASHIER: "cashier",
+  ACCOUNTANT: "accountant",
+  MAINTENANCE: "maintenance",
+  PHYSIOTHERAPY: "physiotherapy",
+  STORE_MANAGER: "store_manager",
+  AMBULANCE: "ambulance",
+  SKIN_SPECIALIST: "skin_specialist",
 };
 
 /**
@@ -243,6 +250,83 @@ export function isRoleAuthorized(role, method, pathname) {
       return m === "POST";
     }
 
+    return false;
+  }
+
+  // 9. Hospital Cashier: Point of sale, bill settlement, pre-booking ledgers, cash close
+  if (r === HOSPITAL_ROLES.CASHIER) {
+    if (path.startsWith("/api/invoices") || path.startsWith("/api/billing") || path.startsWith("/api/cash-close")) {
+      return true;
+    }
+    if (path === "/api/patients" || (path.startsWith("/api/patients/") && m === "GET")) {
+      return m === "GET";
+    }
+    if (path.startsWith("/api/reports")) {
+      return m === "GET";
+    }
+    return false;
+  }
+
+  // 10. Chief Accountant: Financial audits, expense vouchers, receivables aging, cash close
+  if (r === HOSPITAL_ROLES.ACCOUNTANT) {
+    if (path.startsWith("/api/accounts") || path.startsWith("/api/cash-close") || path.startsWith("/api/reports")) {
+      return true;
+    }
+    if (path.startsWith("/api/invoices") && m === "GET") {
+      return true;
+    }
+    return false;
+  }
+
+  // 11. Maintenance & Biomedical Engineer: Work orders, facility checks, equipment service
+  if (r === HOSPITAL_ROLES.MAINTENANCE) {
+    if (path.startsWith("/api/equipments") || path.startsWith("/api/maintenance") || path.startsWith("/api/facility")) {
+      return true;
+    }
+    return false;
+  }
+
+  // 12. Physiotherapy Specialist: Physical therapy items, rehabilitation sales POS, patient list
+  if (r === HOSPITAL_ROLES.PHYSIOTHERAPY) {
+    if (path.startsWith("/api/physiotherapy") || path.startsWith("/api/invoices")) {
+      return true;
+    }
+    if (path === "/api/patients" || (path.startsWith("/api/patients/") && m === "GET")) {
+      return m === "GET";
+    }
+    return false;
+  }
+
+  // 13. Central Store Manager: Store inventory, stock indents, supplier shipments
+  if (r === HOSPITAL_ROLES.STORE_MANAGER) {
+    if (path.startsWith("/api/store") || path.startsWith("/api/inventory") || path.startsWith("/api/suppliers") || path.startsWith("/api/purchases")) {
+      return true;
+    }
+    return false;
+  }
+
+  // 14. Ambulance Fleet: Fleet dispatch, trip logs, trauma services
+  if (r === HOSPITAL_ROLES.AMBULANCE) {
+    if (path.startsWith("/api/ambulance") || path.startsWith("/api/invoices")) {
+      return true;
+    }
+    if (path === "/api/patients" || (path.startsWith("/api/patients/") && m === "GET")) {
+      return m === "GET";
+    }
+    return false;
+  }
+
+  // 15. Skin Specialist: Dermatology consultations, laser therapy logs, topical prescriptions
+  if (r === HOSPITAL_ROLES.SKIN_SPECIALIST) {
+    if (path.startsWith("/api/skin") || path.startsWith("/api/consultations") || path.startsWith("/api/prescriptions")) {
+      return true;
+    }
+    if (path === "/api/patients" || (path.startsWith("/api/patients/") && m === "GET")) {
+      return m === "GET";
+    }
+    if (path === "/api/doctors" || (path.startsWith("/api/doctors/") && m === "GET")) {
+      return m === "GET";
+    }
     return false;
   }
 

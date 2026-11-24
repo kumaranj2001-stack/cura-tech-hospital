@@ -1,4 +1,4 @@
-import type { UserRole } from "../store/types";
+import type { UserRole, ErpModuleId } from "../store/types";
 import { isOverseer } from "../store/types";
 
 export type PageId =
@@ -24,7 +24,23 @@ export type PageId =
   | "users"
   | "settings"
   | "branches"
-  | "privacy";
+  | "privacy"
+  // Seventeen ERP Module Pages
+  | "patient"
+  | "doctor"
+  | "nurse"
+  | "lab"
+  | "pharmacy"
+  | "cashier"
+  | "maintenance"
+  | "accounts"
+  | "certificate"
+  | "equipments"
+  | "admin"
+  | "physiotherapy"
+  | "store"
+  | "ambulance"
+  | "skin";
 
 export interface RolePermissionConfig {
   label: string;
@@ -209,6 +225,97 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissionConfig> = {
     canAccessLab: false,
   },
 
+  cashier: {
+    label: "Hospital Cashier",
+    badge: "💵 Cashier",
+    badgeClass: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800",
+    defaultHome: "cashier",
+    allowedPages: ["cashier", "billing", "invoices", "patients", "accounts", "reports", "privacy"],
+    canViewFinancials: true,
+    canManageInventory: false,
+    canRecordVitals: false,
+    canWriteConsultations: false,
+    canAccessLab: false,
+  },
+
+  accountant: {
+    label: "Chief Accountant",
+    badge: "📊 Accounts",
+    badgeClass: "bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border-blue-200 dark:border-blue-800",
+    defaultHome: "accounts",
+    allowedPages: ["accounts", "cashier", "reports", "invoices", "billing", "privacy"],
+    canViewFinancials: true,
+    canManageInventory: false,
+    canRecordVitals: false,
+    canWriteConsultations: false,
+    canAccessLab: false,
+  },
+
+  maintenance: {
+    label: "Biomedical & Facility Engineer",
+    badge: "🔧 Maintenance",
+    badgeClass: "bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border-amber-200 dark:border-amber-800",
+    defaultHome: "maintenance",
+    allowedPages: ["maintenance", "equipments", "privacy"],
+    canViewFinancials: false,
+    canManageInventory: true,
+    canRecordVitals: false,
+    canWriteConsultations: false,
+    canAccessLab: false,
+  },
+
+  physiotherapy: {
+    label: "Physiotherapist / Rehab Specialist",
+    badge: "🏃 Physiotherapy",
+    badgeClass: "bg-teal-50 text-teal-700 dark:bg-teal-950/60 dark:text-teal-300 border-teal-200 dark:border-teal-800",
+    defaultHome: "physiotherapy",
+    allowedPages: ["physiotherapy", "patients", "billing", "visitTrail", "privacy"],
+    canViewFinancials: true,
+    canManageInventory: true,
+    canRecordVitals: true,
+    canWriteConsultations: false,
+    canAccessLab: false,
+  },
+
+  store_manager: {
+    label: "Central Store Manager",
+    badge: "📦 Store",
+    badgeClass: "bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800",
+    defaultHome: "store",
+    allowedPages: ["store", "inventory", "purchases", "suppliers", "privacy"],
+    canViewFinancials: true,
+    canManageInventory: true,
+    canRecordVitals: false,
+    canWriteConsultations: false,
+    canAccessLab: false,
+  },
+
+  ambulance: {
+    label: "Ambulance Services & Fleet",
+    badge: "🚑 Ambulance",
+    badgeClass: "bg-red-50 text-red-700 dark:bg-red-950/60 dark:text-red-300 border-red-200 dark:border-red-800",
+    defaultHome: "ambulance",
+    allowedPages: ["ambulance", "patients", "billing", "privacy"],
+    canViewFinancials: true,
+    canManageInventory: false,
+    canRecordVitals: false,
+    canWriteConsultations: false,
+    canAccessLab: false,
+  },
+
+  skin_specialist: {
+    label: "Dermatologist (Skin Clinic)",
+    badge: "✨ Skin Clinic",
+    badgeClass: "bg-pink-50 text-pink-700 dark:bg-pink-950/60 dark:text-pink-300 border-pink-200 dark:border-pink-800",
+    defaultHome: "skin",
+    allowedPages: ["skin", "patients", "doctors", "billing", "visitTrail", "privacy"],
+    canViewFinancials: true,
+    canManageInventory: false,
+    canRecordVitals: false,
+    canWriteConsultations: true,
+    canAccessLab: false,
+  },
+
   // Hospital Administrator: Operational management across all hospital modules
   admin: {
     label: "Hospital Administrator",
@@ -238,6 +345,21 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissionConfig> = {
       "branches",
       "settings",
       "privacy",
+      "patient",
+      "doctor",
+      "nurse",
+      "lab",
+      "pharmacy",
+      "cashier",
+      "maintenance",
+      "accounts",
+      "certificate",
+      "equipments",
+      "admin",
+      "physiotherapy",
+      "store",
+      "ambulance",
+      "skin",
     ],
     canViewFinancials: true,
     canManageInventory: true,
@@ -276,6 +398,21 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissionConfig> = {
       "branches",
       "settings",
       "privacy",
+      "patient",
+      "doctor",
+      "nurse",
+      "lab",
+      "pharmacy",
+      "cashier",
+      "maintenance",
+      "accounts",
+      "certificate",
+      "equipments",
+      "admin",
+      "physiotherapy",
+      "store",
+      "ambulance",
+      "skin",
     ],
     canViewFinancials: true,
     canManageInventory: true,
@@ -313,6 +450,21 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissionConfig> = {
       "branches",
       "settings",
       "privacy",
+      "patient",
+      "doctor",
+      "nurse",
+      "lab",
+      "pharmacy",
+      "cashier",
+      "maintenance",
+      "accounts",
+      "certificate",
+      "equipments",
+      "admin",
+      "physiotherapy",
+      "store",
+      "ambulance",
+      "skin",
     ],
     canViewFinancials: true,
     canManageInventory: true,
@@ -377,4 +529,85 @@ export function getRoleBadgeInfo(role: UserRole | undefined): { label: string; b
     badge: cfg.badge,
     badgeClass: cfg.badgeClass,
   };
+}
+
+/**
+ * Validates if the given role is permitted to access a top-level ERP module
+ */
+export function canAccessModule(role: UserRole | undefined, moduleId: ErpModuleId): boolean {
+  if (!role) return false;
+  if (isOverseer(role) || role === "admin" || role === "admin_pharmacist") return true;
+
+  switch (role) {
+    case "doctor":
+      return ["doctor", "patient", "nurse", "lab", "skin"].includes(moduleId);
+    case "nurse":
+      return ["nurse", "patient", "doctor"].includes(moduleId);
+    case "receptionist":
+      return ["patient", "cashier", "certificate", "ambulance", "pharmacy"].includes(moduleId);
+    case "lab_tech":
+      return ["lab"].includes(moduleId);
+    case "staff_pharmacist":
+    case "pharmacist":
+      return ["pharmacy", "store"].includes(moduleId);
+    case "cashier":
+      return ["cashier", "accounts", "reports", "patient"].includes(moduleId);
+    case "accountant":
+      return ["accounts", "cashier", "reports"].includes(moduleId);
+    case "maintenance":
+      return ["maintenance", "equipments"].includes(moduleId);
+    case "physiotherapy":
+      return ["physiotherapy", "patient"].includes(moduleId);
+    case "store_manager":
+      return ["store", "pharmacy"].includes(moduleId);
+    case "ambulance":
+      return ["ambulance", "patient"].includes(moduleId);
+    case "skin_specialist":
+      return ["skin", "patient", "doctor"].includes(moduleId);
+    case "staff":
+      return ["patient", "pharmacy", "cashier"].includes(moduleId);
+    default:
+      return false;
+  }
+}
+
+/**
+ * Returns default top-level ERP module for a user based on their role
+ */
+export function getRoleDefaultModule(role: UserRole | undefined): ErpModuleId {
+  if (!role) return "patient";
+  switch (role) {
+    case "doctor":
+      return "doctor";
+    case "nurse":
+      return "nurse";
+    case "receptionist":
+      return "patient";
+    case "lab_tech":
+      return "lab";
+    case "staff_pharmacist":
+    case "pharmacist":
+      return "pharmacy";
+    case "cashier":
+      return "cashier";
+    case "accountant":
+      return "accounts";
+    case "maintenance":
+      return "maintenance";
+    case "physiotherapy":
+      return "physiotherapy";
+    case "store_manager":
+      return "store";
+    case "ambulance":
+      return "ambulance";
+    case "skin_specialist":
+      return "skin";
+    case "admin":
+    case "superadmin":
+    case "developer":
+    case "admin_pharmacist":
+      return "dashboard";
+    default:
+      return "patient";
+  }
 }

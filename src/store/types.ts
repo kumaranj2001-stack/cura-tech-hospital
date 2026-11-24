@@ -10,7 +10,33 @@ export type UserRole =
   | "pharmacist"
   | "admin"
   | "staff"
-  | "lab_tech";
+  | "lab_tech"
+  | "cashier"
+  | "accountant"
+  | "maintenance"
+  | "physiotherapy"
+  | "store_manager"
+  | "ambulance"
+  | "skin_specialist";
+
+export type ErpModuleId =
+  | "patient"
+  | "doctor"
+  | "nurse"
+  | "lab"
+  | "pharmacy"
+  | "cashier"
+  | "maintenance"
+  | "accounts"
+  | "reports"
+  | "certificate"
+  | "equipments"
+  | "admin"
+  | "physiotherapy"
+  | "store"
+  | "ambulance"
+  | "skin"
+  | "dashboard";
 
 /* Roles with full multi-branch oversight (super admin + legacy developer) */
 export const isOverseer = (role?: string) => role === "superadmin" || role === "developer";
@@ -698,3 +724,274 @@ export const getAuditRetentionMs = (flags: FeatureFlags): number | null => {
   const days = getAuditRetentionDays(flags);
   return days === null ? null : days * 24 * 60 * 60 * 1000;
 };
+
+// ── Hospital ERP Extended Module Data Interfaces ──
+
+export type CertificateType =
+  | "birth"
+  | "vaccination"
+  | "medical"
+  | "fitness"
+  | "death"
+  | "self_declaration"
+  | "marine"
+  | "consent"
+  | "surgical_consent";
+
+export interface HospitalCertificate {
+  id: string;
+  branchId?: string;
+  certificateType: CertificateType;
+  certificateNumber: string; // e.g. "CERT-2026-0012"
+  patientId: string;
+  patientName: string;
+  patientUhid?: string;
+  patientAge?: number;
+  patientGender?: string;
+  doctorName: string;
+  issueDate: string; // ISO / YYYY-MM-DD
+  validUntil?: string;
+  purpose: string;
+  diagnosis?: string;
+  details: Record<string, any>;
+  status: "issued" | "revoked";
+  createdAt: string;
+}
+
+export interface DailyWorksheetEntry {
+  id: string;
+  date: string;
+  equipmentId: string;
+  equipmentName: string;
+  checkedBy: string;
+  status: "operational" | "minor_fault" | "breakdown";
+  actionTaken?: string;
+  remarks: string;
+}
+
+export interface BiomedicalEquipment {
+  id: string;
+  branchId?: string;
+  name: string;
+  model: string;
+  serialNumber: string;
+  department: string;
+  location: string;
+  status: "working" | "under_maintenance" | "breakdown" | "calibration_due";
+  purchaseDate: string;
+  warrantyExpiry?: string;
+  amcVendor?: string;
+  lastServiceDate?: string;
+  nextServiceDue: string;
+  dailyWorksheets?: DailyWorksheetEntry[];
+  serviceHistory?: {
+    id: string;
+    serviceDate: string;
+    engineerName: string;
+    description: string;
+    cost: number;
+  }[];
+  createdAt: string;
+}
+
+export interface GatePass {
+  id: string;
+  passNumber: string; // e.g. "GP-2026-104"
+  equipmentId?: string;
+  equipmentName: string;
+  purpose: "Repair" | "Calibration" | "Transfer" | "Vendor Demo" | "Scrap";
+  vendorName: string;
+  issuedDate: string;
+  expectedReturnDate: string;
+  actualReturnDate?: string;
+  status: "outward" | "returned" | "overdue";
+  authorizedBy: string;
+  contactPerson?: string;
+  contactPhone?: string;
+  remarks?: string;
+  createdAt: string;
+}
+
+export interface CashCloseRecord {
+  id: string;
+  branchId?: string;
+  cashierId: string;
+  cashierName: string;
+  date: string; // YYYY-MM-DD
+  shift: "Morning" | "Evening" | "Night" | "Full Day";
+  openingFloat: number;
+  cashCollected: number;
+  cardCollected: number;
+  upiCollected: number;
+  totalCollected: number;
+  cashHandover: number;
+  variance: number; // positive = excess, negative = short
+  denominations: Record<string, number>; // e.g. { "500": 10, "200": 5, "100": 20 }
+  status: "closed" | "verified";
+  verifiedBy?: string;
+  notes?: string;
+  createdAt: string;
+}
+
+export interface AccountExpense {
+  id: string;
+  branchId?: string;
+  voucherNumber: string; // e.g. "EXP-2026-081"
+  category: "Utilities" | "Salaries" | "Medical Supplies" | "Maintenance" | "Doctor Share" | "Office Expense" | "Petty Cash";
+  description: string;
+  amount: number;
+  paidTo: string;
+  paymentMode: "Cash" | "Bank Transfer" | "Cheque" | "UPI";
+  date: string;
+  approvedBy: string;
+  receiptUrl?: string;
+  status: "paid" | "pending";
+  createdAt: string;
+}
+
+export interface AccountReceivable {
+  id: string;
+  branchId?: string;
+  billNumber: string;
+  debtorName: string;
+  category: "TPA / Insurance" | "Corporate Tie-up" | "Government Scheme" | "Patient Credit";
+  amount: number;
+  receivedAmount: number;
+  balanceDue: number;
+  claimDate: string;
+  dueDate: string;
+  status: "pending" | "partial" | "settled";
+  referenceNumber?: string;
+  createdAt: string;
+}
+
+export interface DoctorIncomeRecord {
+  id: string;
+  doctorId: string;
+  doctorName: string;
+  department: string;
+  month: string; // "2026-11"
+  totalConsultations: number;
+  opdShareAmount: number;
+  ipdProceduresAmount: number;
+  grossPayable: number;
+  tdsDeduction: number; // e.g. 10%
+  netPaid: number;
+  paymentDate: string;
+  paymentMode: "Bank Transfer" | "Cheque";
+  status: "paid" | "pending";
+  referenceNumber?: string;
+}
+
+export interface PhysioItem {
+  id: string;
+  name: string;
+  category: "Support & Braces" | "Therapy Modality" | "Resistance & Exercise" | "Electrotherapy Acc";
+  price: number;
+  stock: number;
+  reorderLevel: number;
+  unit: string;
+}
+
+export interface PhysioSale {
+  id: string;
+  billNumber: string;
+  patientId: string;
+  patientName: string;
+  patientUhid?: string;
+  items: {
+    itemId: string;
+    name: string;
+    qty: number;
+    price: number;
+    total: number;
+  }[];
+  subtotal: number;
+  discount: number;
+  total: number;
+  paymentMode: "Cash" | "UPI" | "Card";
+  date: string;
+  attendedBy: string;
+}
+
+export interface StoreItem {
+  id: string;
+  code: string; // e.g. "ST-001"
+  name: string;
+  category: "Disposables & PPE" | "Linen & Bedding" | "Hospital Stationery" | "Sanitation & Chemical" | "Surgical Instruments";
+  stock: number;
+  unit: string; // "Box", "Roll", "Packet", "Nos"
+  unitCost: number;
+  reorderLevel: number;
+  supplier: string;
+  location?: string;
+}
+
+export interface AmbulanceVehicle {
+  id: string;
+  vehicleNumber: string; // e.g. "TN 01 AB 1008"
+  type: "Advanced Life Support (ALS)" | "Basic Life Support (BLS)" | "Neonatal Transport" | "Patient Transport (PTS)";
+  status: "available" | "on_trip" | "maintenance";
+  driverName: string;
+  driverPhone: string;
+  paramedicName: string;
+  oxygenLevelPercent: number; // e.g. 95%
+  currentOdometer: number;
+  fuelLevel: "Full" | "3/4" | "1/2" | "Low";
+  lastServiceDate: string;
+  fitnessValidUntil: string;
+}
+
+export interface AmbulanceTrip {
+  id: string;
+  tripNumber: string; // "AMB-TRIP-102"
+  vehicleId: string;
+  vehicleNumber: string;
+  patientName: string;
+  pickupLocation: string;
+  dropLocation: string;
+  startTime: string;
+  endTime?: string;
+  distanceKm: number;
+  tripCharge: number;
+  status: "allotted" | "dispatched" | "completed" | "cancelled";
+  paymentStatus: "paid" | "pending";
+  paymentMode?: "Cash" | "UPI" | "Card";
+  driverName: string;
+  urgency: "Emergency" | "Non-Emergency" | "Transfer";
+  notes?: string;
+  createdAt: string;
+}
+
+export interface SkinRecord {
+  id: string;
+  patientId: string;
+  patientName: string;
+  patientUhid?: string;
+  procedureName: string; // "Chemical Peel", "Laser Resurfacing", "Acne Extraction", "PRP Session", "Dermapen"
+  doctorName: string;
+  date: string;
+  sittingNumber: number;
+  totalSittings: number;
+  charge: number;
+  skinType?: string; // "Type II", "Type III", "Oily/Sensitive"
+  beforeNotes?: string;
+  procedureNotes?: string;
+  afterCareAdvice?: string;
+  prescribedTopicals?: string[];
+  status: "scheduled" | "completed";
+}
+
+export interface MaintenanceWorkOrder {
+  id: string;
+  ticketNumber: string; // "WO-2026-054"
+  area: "ICU" | "Operation Theatre" | "Wards" | "Radiology" | "Pharmacy" | "HVAC & Generator" | "Plumbing / RO";
+  issue: string;
+  priority: "Critical" | "High" | "Medium" | "Routine";
+  assignedTo: string;
+  status: "open" | "in_progress" | "resolved" | "closed";
+  reportedDate: string;
+  resolvedDate?: string;
+  cost?: number;
+}
+

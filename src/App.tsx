@@ -2,7 +2,8 @@ import React, { useState, useEffect } from "react";
 import { StoreProvider, useStore } from "./store/store";
 import { ThemeProvider } from "./store/theme";
 import { isOverseer, planAllowsMultiBranch } from "./store/types";
-import { canAccessPage, getRoleHome } from "./utils/permissions";
+import type { ErpModuleId } from "./store/types";
+import { canAccessPage, canAccessModule, getRoleHome, getRoleDefaultModule } from "./utils/permissions";
 import Login from "./pages/Login";
 import Layout, { type PageId } from "./components/Layout";
 import Dashboard from "./pages/Dashboard";
@@ -29,8 +30,29 @@ import Settings from "./pages/Settings";
 import Branches from "./pages/Branches";
 import Privacy from "./pages/Privacy";
 
+// Seventeen Role-ERP Specialty Modules
+import LabERP from "./pages/LabERP";
+import CashierERP from "./pages/CashierERP";
+import AccountsERP from "./pages/AccountsERP";
+import ReportsERP from "./pages/ReportsERP";
+import CertificateERP from "./pages/CertificateERP";
+import EquipmentsERP from "./pages/EquipmentsERP";
+import AdminERP from "./pages/AdminERP";
+import PhysiotherapyERP from "./pages/PhysiotherapyERP";
+import StoreERP from "./pages/StoreERP";
+import AmbulanceERP from "./pages/AmbulanceERP";
+import SkinERP from "./pages/SkinERP";
+import MaintenanceERP from "./pages/MaintenanceERP";
+
 const Inner: React.FC = () => {
   const { currentUser, flags, staffPlan, customStaffPlanLimits } = useStore();
+
+  const [activeErpModule, setActiveErpModule] = useState<ErpModuleId>(() =>
+    getRoleDefaultModule(currentUser?.role)
+  );
+  const [activeAction, setActiveAction] = useState<string>("");
+  const [activeDropdownOption, setActiveDropdownOption] = useState<string | undefined>(undefined);
+
   const [page, setPage] = useState<PageId>(() => getRoleHome(currentUser?.role));
   const [invoiceFocus, setInvoiceFocus] = useState<string | null>(null);
   const [inventoryFilter, setInventoryFilter] = useState<string | null>(null);
@@ -39,10 +61,29 @@ const Inner: React.FC = () => {
 
   // Automatically transition to the user's role-dedicated workstation upon login / role switch
   useEffect(() => {
-    if (currentUser?.role && !canAccessPage(currentUser.role, page)) {
-      setPage(getRoleHome(currentUser.role));
+    if (currentUser?.role) {
+      const defaultMod = getRoleDefaultModule(currentUser.role);
+      setActiveErpModule(defaultMod);
+      const defaultPage = getRoleHome(currentUser.role);
+      setPage(defaultPage);
     }
-  }, [currentUser?.role, page]);
+  }, [currentUser?.role]);
+
+  const handleSelectModule = (modId: ErpModuleId) => {
+    if (!canAccessModule(currentUser?.role, modId)) return;
+    setActiveErpModule(modId);
+    setActiveAction("");
+    setActiveDropdownOption(undefined);
+    setPage(modId as PageId);
+  };
+
+  const handleRibbonAction = (modId: ErpModuleId, actId: string, dropdownOpt?: string) => {
+    if (!canAccessModule(currentUser?.role, modId)) return;
+    setActiveErpModule(modId);
+    setActiveAction(actId);
+    setActiveDropdownOption(dropdownOpt);
+    setPage(modId as PageId);
+  };
 
   const openInvoice = (id: string) => {
     if (canAccessPage(currentUser?.role, "invoices")) {
@@ -61,34 +102,25 @@ const Inner: React.FC = () => {
   if (!currentUser) return <Login />;
 
   // Strict Role-Based Access Control (RBAC) Route Guard
-  // Clinicians & nurses are completely prevented from loading financial/inventory views
-  if (!canAccessPage(currentUser.role, page)) {
-    const roleHome = getRoleHome(currentUser.role);
-    setPage(roleHome);
-    return null;
-  }
-  // Administrative oversight (Super Admin, Developer, Admin, Admin Pharmacist)
-  const isAdministrative = isOverseer(currentUser.role) || currentUser.role === "admin" || currentUser.role === "admin_pharmacist";
+  const isAdministrative =
+    isOverseer(currentUser.role) || currentUser.role === "admin" || currentUser.role === "admin_pharmacist";
+
   if ((page === "audit" || page === "branches") && !isAdministrative) {
     setPage(getRoleHome(currentUser.role));
     return null;
   }
-  // Branches tab / multi-branch tools require multiBranch plan allowance
   if (page === "branches" && !planAllowsMultiBranch(staffPlan, customStaffPlanLimits)) {
     setPage(getRoleHome(currentUser.role));
     return null;
   }
-  // Users is administrative oversight only
   if (page === "users" && !isAdministrative) {
     setPage(getRoleHome(currentUser.role));
     return null;
   }
-  // GRN module disabled by developer toggle
   if (!flags.grnModule && (page === "purchases" || page === "grn" || page === "approvedGrn")) {
     setPage(getRoleHome(currentUser.role));
     return null;
   }
-  // Audit hidden when logging is disabled
   if (!flags.auditEnabled && page === "audit") {
     setPage(getRoleHome(currentUser.role));
     return null;
@@ -96,18 +128,22 @@ const Inner: React.FC = () => {
 
   let content: React.ReactNode;
   switch (page) {
+    // 1. Patient Module
+    case "patient":
     case "reception":
       content = (
         <Reception
           onNavigateToDoctor={(pId) => {
-            if (canAccessPage(currentUser?.role, "doctorDashboard")) {
+            if (canAccessModule(currentUser?.role, "doctor")) {
               setFocusedPatientId(pId);
+              setActiveErpModule("doctor");
               setPage("doctorDashboard");
             }
           }}
           onNavigateToNurse={(pId) => {
-            if (canAccessPage(currentUser?.role, "nursingStation")) {
+            if (canAccessModule(currentUser?.role, "nurse")) {
               setFocusedPatientId(pId);
+              setActiveErpModule("nurse");
               setPage("nursingStation");
             }
           }}
@@ -118,7 +154,7 @@ const Inner: React.FC = () => {
             }
           }}
           onNavigateToBilling={(pId) => {
-            if (canAccessPage(currentUser?.role, "billing")) {
+            if (canAccessModule(currentUser?.role, "cashier") || canAccessPage(currentUser?.role, "billing")) {
               setFocusedPatientId(pId);
               setPage("billing");
             }
@@ -126,18 +162,23 @@ const Inner: React.FC = () => {
         />
       );
       break;
+
+    // 2. Doctor Module
+    case "doctor":
     case "doctorDashboard":
       content = (
         <DoctorDashboard
           initialPatientId={focusedPatientId || undefined}
           onNavigateToPharmacy={() => {
-            if (canAccessPage(currentUser?.role, "billing")) {
+            if (canAccessModule(currentUser?.role, "pharmacy")) {
+              setActiveErpModule("pharmacy");
               setPage("billing");
             }
           }}
           onNavigateToLab={() => {
-            if (canAccessPage(currentUser?.role, "diagnosticLab")) {
-              setPage("diagnosticLab");
+            if (canAccessModule(currentUser?.role, "lab")) {
+              setActiveErpModule("lab");
+              setPage("lab");
             }
           }}
           onNavigateToVisitTrail={(uhid) => {
@@ -149,13 +190,17 @@ const Inner: React.FC = () => {
         />
       );
       break;
+
+    // 3. Nurse Module
+    case "nurse":
     case "nursingStation":
       content = (
         <NursingStation
           initialPatientId={focusedPatientId || undefined}
           onNavigateToDoctor={(pId) => {
-            if (canAccessPage(currentUser?.role, "doctorDashboard")) {
+            if (canAccessModule(currentUser?.role, "doctor")) {
               setFocusedPatientId(pId);
+              setActiveErpModule("doctor");
               setPage("doctorDashboard");
             }
           }}
@@ -168,23 +213,140 @@ const Inner: React.FC = () => {
         />
       );
       break;
+
+    // 4. Lab Module
+    case "lab":
     case "diagnosticLab":
       content = (
-        <DiagnosticLab
-          onNavigateToBilling={() => {
-            if (canAccessPage(currentUser?.role, "billing")) {
-              setPage("billing");
-            }
-          }}
-          onNavigateToVisitTrail={(uhid) => {
-            if (canAccessPage(currentUser?.role, "visitTrail")) {
-              setFocusedUhid(uhid);
-              setPage("visitTrail");
-            }
-          }}
+        <LabERP
+          initialAction={activeAction || "lab_dashboard"}
+          dropdownOption={activeDropdownOption}
         />
       );
       break;
+
+    // 5. Pharmacy Module
+    case "pharmacy":
+    case "billing":
+      content = <Billing initialPatientId={focusedPatientId || undefined} />;
+      break;
+
+    // 6. Cashier Module
+    case "cashier":
+      content = (
+        <CashierERP
+          initialAction={activeAction || "cashier_dash"}
+          dropdownOption={activeDropdownOption}
+        />
+      );
+      break;
+
+    // 7. Maintenance Module
+    case "maintenance":
+      content = (
+        <MaintenanceERP
+          initialAction={activeAction || "work_orders"}
+          dropdownOption={activeDropdownOption}
+        />
+      );
+      break;
+
+    // 8. Accounts Module
+    case "accounts":
+      content = (
+        <AccountsERP
+          initialAction={activeAction || "final_cash_close"}
+          dropdownOption={activeDropdownOption}
+        />
+      );
+      break;
+
+    // 9. Reports Module
+    case "reports":
+      content = (
+        <ReportsERP
+          initialAction={activeAction || "rep_visit_details"}
+          dropdownOption={activeDropdownOption}
+        />
+      );
+      break;
+
+    // 10. Certificate Module
+    case "certificate":
+      content = (
+        <CertificateERP
+          initialAction={activeAction || "cert_birth"}
+          subTypeOption={activeDropdownOption}
+        />
+      );
+      break;
+
+    // 11. Equipments Module
+    case "equipments":
+      content = (
+        <EquipmentsERP
+          initialAction={activeAction || "eq_dashboard"}
+          dropdownOption={activeDropdownOption}
+        />
+      );
+      break;
+
+    // 12. Admin Module
+    case "admin":
+      content = (
+        <AdminERP
+          initialAction={activeAction || "create_user"}
+          dropdownOption={activeDropdownOption}
+        />
+      );
+      break;
+
+    // 13. Physiotherapy Module
+    case "physiotherapy":
+      content = (
+        <PhysiotherapyERP
+          initialAction={activeAction || "physio_sales"}
+          dropdownOption={activeDropdownOption}
+        />
+      );
+      break;
+
+    // 14. Store Module
+    case "store":
+      content = (
+        <StoreERP
+          initialAction={activeAction || "store_sales"}
+          dropdownOption={activeDropdownOption}
+        />
+      );
+      break;
+
+    // 15. Ambulance Module
+    case "ambulance":
+      content = (
+        <AmbulanceERP
+          initialAction={activeAction || "amb_allotment"}
+          dropdownOption={activeDropdownOption}
+        />
+      );
+      break;
+
+    // 16. Skin Module
+    case "skin":
+      content = (
+        <SkinERP
+          initialAction={activeAction || "skin_consultation"}
+          dropdownOption={activeDropdownOption}
+        />
+      );
+      break;
+
+    // 17. Dashboard Module
+    case "dashboard":
+      content = <Dashboard setPage={setPage} onOpenInvoice={openInvoice} onOpenInventory={openInventory} />;
+      break;
+
+    // Legacy & Sub-views
     case "visitTrail":
       content = (
         <VisitTrail
@@ -197,12 +359,6 @@ const Inner: React.FC = () => {
           }}
         />
       );
-      break;
-    case "dashboard":
-      content = <Dashboard setPage={setPage} onOpenInvoice={openInvoice} onOpenInventory={openInventory} />;
-      break;
-    case "billing":
-      content = <Billing initialPatientId={focusedPatientId || undefined} />;
       break;
     case "invoices":
       content = <Invoices focusId={invoiceFocus} onConsumeFocus={() => setInvoiceFocus(null)} />;
@@ -234,9 +390,6 @@ const Inner: React.FC = () => {
     case "suppliers":
       content = <Suppliers />;
       break;
-    case "reports":
-      content = <Reports />;
-      break;
     case "audit":
       content = <Audit />;
       break;
@@ -256,7 +409,18 @@ const Inner: React.FC = () => {
       content = <Reception />;
   }
 
-  return <Layout page={page} setPage={setPage}>{content}</Layout>;
+  return (
+    <Layout
+      activeModule={activeErpModule}
+      setActiveModule={handleSelectModule}
+      activeAction={activeAction}
+      onRibbonActionClick={handleRibbonAction}
+      page={page}
+      setPage={setPage}
+    >
+      {content}
+    </Layout>
+  );
 };
 
 const App: React.FC = () => (

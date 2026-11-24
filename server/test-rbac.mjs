@@ -93,6 +93,31 @@ for (const pharmaRole of ["staff_pharmacist", "pharmacist"]) {
 }
 console.log("✓ Staff Pharmacist dispensing & pharmacy billing permissions verified.\n");
 
+// 8.5 Cashier, Accountant, Maintenance, Physio, Store, Ambulance, Skin permissions
+console.log("8.5 Testing Cashier, Accountant, Maintenance, Physio, Store, Ambulance, Skin permissions...");
+assert.equal(isRoleAuthorized("cashier", "POST", "/api/invoices"), true, "Cashier can create invoices");
+assert.equal(isRoleAuthorized("cashier", "POST", "/api/cash-close"), true, "Cashier can perform cash close");
+assert.equal(isRoleAuthorized("cashier", "POST", "/api/users"), false, "Cashier cannot manage users");
+
+assert.equal(isRoleAuthorized("accountant", "POST", "/api/accounts/expense"), true, "Accountant can record expenses");
+assert.equal(isRoleAuthorized("accountant", "POST", "/api/users"), false, "Accountant cannot create users");
+
+assert.equal(isRoleAuthorized("maintenance", "POST", "/api/equipments/service"), true, "Maintenance can log equipment service");
+assert.equal(isRoleAuthorized("maintenance", "POST", "/api/invoices"), false, "Maintenance cannot bill");
+
+assert.equal(isRoleAuthorized("physiotherapy", "POST", "/api/physiotherapy/sale"), true, "Physiotherapy can bill physio items");
+assert.equal(isRoleAuthorized("physiotherapy", "POST", "/api/users"), false, "Physiotherapy cannot manage users");
+
+assert.equal(isRoleAuthorized("store_manager", "POST", "/api/store/indent"), true, "Store manager can issue indents");
+assert.equal(isRoleAuthorized("store_manager", "POST", "/api/users"), false, "Store manager cannot manage users");
+
+assert.equal(isRoleAuthorized("ambulance", "POST", "/api/ambulance/trip"), true, "Ambulance driver can log trips");
+assert.equal(isRoleAuthorized("ambulance", "POST", "/api/users"), false, "Ambulance driver cannot manage users");
+
+assert.equal(isRoleAuthorized("skin_specialist", "POST", "/api/skin/procedure"), true, "Skin specialist can log procedures");
+assert.equal(isRoleAuthorized("skin_specialist", "POST", "/api/users"), false, "Skin specialist cannot manage users");
+console.log("✓ All 17 Hospital ERP roles verified.\n");
+
 // 9. HTTP enforcement integration mock test
 console.log("9. Testing HTTP enforceRbac middleware behavior...");
 const mockReqPublic = { url: "/api/health", method: "GET", headers: {} };

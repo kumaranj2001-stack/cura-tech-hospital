@@ -1423,6 +1423,168 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // ── HOSPITAL ERP SPECIALTY MODULE REST ENDPOINTS ──
+  // Certificates API
+  if (url.pathname.startsWith("/api/certificates")) {
+    if (req.method === "GET") {
+      return sendJson(res, 200, { success: true, certificates: [] });
+    }
+    if (req.method === "POST") {
+      let body = "";
+      req.on("data", (chunk) => { body += chunk; });
+      req.on("end", () => {
+        try {
+          const payload = body ? JSON.parse(body) : {};
+          const id = payload.id || `CERT-${Date.now()}`;
+          return sendJson(res, 201, { success: true, certificate: { ...payload, id } });
+        } catch (e) {
+          return sendJson(res, 400, { success: false, error: e.message });
+        }
+      });
+      return;
+    }
+  }
+
+  // Equipments API
+  if (url.pathname.startsWith("/api/equipments")) {
+    if (req.method === "GET") {
+      return sendJson(res, 200, { success: true, equipments: [] });
+    }
+    if (req.method === "POST" || req.method === "PUT") {
+      let body = "";
+      req.on("data", (chunk) => { body += chunk; });
+      req.on("end", () => {
+        try {
+          const payload = body ? JSON.parse(body) : {};
+          return sendJson(res, 200, { success: true, equipment: payload });
+        } catch (e) {
+          return sendJson(res, 400, { success: false, error: e.message });
+        }
+      });
+      return;
+    }
+  }
+
+  // Cash Close & Accounts API
+  if (url.pathname.startsWith("/api/cash-close") || url.pathname.startsWith("/api/accounts")) {
+    if (req.method === "GET") {
+      return sendJson(res, 200, { success: true, records: [] });
+    }
+    if (req.method === "POST") {
+      let body = "";
+      req.on("data", (chunk) => { body += chunk; });
+      req.on("end", () => {
+        try {
+          const payload = body ? JSON.parse(body) : {};
+          return sendJson(res, 201, { success: true, record: payload });
+        } catch (e) {
+          return sendJson(res, 400, { success: false, error: e.message });
+        }
+      });
+      return;
+    }
+  }
+
+  // Physiotherapy API
+  if (url.pathname.startsWith("/api/physiotherapy")) {
+    if (req.method === "GET") {
+      return sendJson(res, 200, { success: true, sales: [], items: [] });
+    }
+    if (req.method === "POST") {
+      let body = "";
+      req.on("data", (chunk) => { body += chunk; });
+      req.on("end", () => {
+        try {
+          const payload = body ? JSON.parse(body) : {};
+          return sendJson(res, 201, { success: true, sale: payload });
+        } catch (e) {
+          return sendJson(res, 400, { success: false, error: e.message });
+        }
+      });
+      return;
+    }
+  }
+
+  // Central Store API
+  if (url.pathname.startsWith("/api/store")) {
+    if (req.method === "GET") {
+      return sendJson(res, 200, { success: true, materials: [], indents: [] });
+    }
+    if (req.method === "POST") {
+      let body = "";
+      req.on("data", (chunk) => { body += chunk; });
+      req.on("end", () => {
+        try {
+          const payload = body ? JSON.parse(body) : {};
+          return sendJson(res, 201, { success: true, indent: payload });
+        } catch (e) {
+          return sendJson(res, 400, { success: false, error: e.message });
+        }
+      });
+      return;
+    }
+  }
+
+  // Ambulance Fleet API
+  if (url.pathname.startsWith("/api/ambulance")) {
+    if (req.method === "GET") {
+      return sendJson(res, 200, { success: true, fleet: [], trips: [] });
+    }
+    if (req.method === "POST") {
+      let body = "";
+      req.on("data", (chunk) => { body += chunk; });
+      req.on("end", () => {
+        try {
+          const payload = body ? JSON.parse(body) : {};
+          return sendJson(res, 201, { success: true, trip: payload });
+        } catch (e) {
+          return sendJson(res, 400, { success: false, error: e.message });
+        }
+      });
+      return;
+    }
+  }
+
+  // Skin & Dermatology API
+  if (url.pathname.startsWith("/api/skin")) {
+    if (req.method === "GET") {
+      return sendJson(res, 200, { success: true, procedures: [], regimens: [] });
+    }
+    if (req.method === "POST") {
+      let body = "";
+      req.on("data", (chunk) => { body += chunk; });
+      req.on("end", () => {
+        try {
+          const payload = body ? JSON.parse(body) : {};
+          return sendJson(res, 201, { success: true, session: payload });
+        } catch (e) {
+          return sendJson(res, 400, { success: false, error: e.message });
+        }
+      });
+      return;
+    }
+  }
+
+  // Facility Maintenance API
+  if (url.pathname.startsWith("/api/maintenance") || url.pathname.startsWith("/api/facility")) {
+    if (req.method === "GET") {
+      return sendJson(res, 200, { success: true, workOrders: [] });
+    }
+    if (req.method === "POST" || req.method === "PUT") {
+      let body = "";
+      req.on("data", (chunk) => { body += chunk; });
+      req.on("end", () => {
+        try {
+          const payload = body ? JSON.parse(body) : {};
+          return sendJson(res, 201, { success: true, workOrder: payload });
+        } catch (e) {
+          return sendJson(res, 400, { success: false, error: e.message });
+        }
+      });
+      return;
+    }
+  }
+
   // Not found
   sendJson(res, 404, { success: false, error: `Route not found: ${req.method} ${url.pathname}` });
 });
