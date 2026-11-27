@@ -55,7 +55,7 @@ export async function renderPatientView(viewId, container, params = {}) {
 
 async function renderNewPatient(container) {
   const [patients, cfg] = await Promise.all([db.list("patients"), db.getHospitalSettings()]);
-  const prefix = (cfg.uhidPrefix || "GH").toUpperCase();
+  const prefix = (cfg.uhidPrefix || "CVH").toUpperCase();
 
   container.innerHTML = `
     <div class="module-header">
@@ -168,7 +168,7 @@ async function renderEditPatients(container) {
     ],
     rows: patients,
     exportFileName: "patients-directory.csv",
-    printTitle: "Guru Hospital — Patient Register"
+    printTitle: "See Curavite Hospital Management — Patient Register"
   });
 
   container.querySelector("#edit-pat-tbl").onclick = (e) => {
@@ -887,7 +887,7 @@ async function renderAlertsQueue(container, scope) {
       phone,
       channel: "WhatsApp",
       category: scope,
-      message: `Hello ${name}, Reminder from Guru Hospital: ${detail}.`
+      message: `Hello ${name}, Reminder from See Curavite Hospital Management: ${detail}.`
     });
     toast("Alert logged in SMS/WhatsApp queue.", "success");
     if (res.whatsappUrl) window.open(res.whatsappUrl, "_blank", "noopener");
@@ -904,7 +904,7 @@ async function renderSendSms(container) {
         <div class="form-group"><label>Mobile Number *</label><input name="phone" required placeholder="10-digit mobile" /></div>
         <div class="form-group"><label>Channel</label><select name="channel"><option>SMS</option><option>WhatsApp</option></select></div>
         <div class="form-group"><label>Category</label><select name="category"><option>Appointment</option><option>Lab Ready</option><option>Pharmacy Refill</option><option>Vaccination</option></select></div>
-        <div class="form-group form-span-2"><label>Message Text *</label><textarea name="message" rows="2" required>Dear Patient, your consultation/report update from Guru Hospital is ready.</textarea></div>
+        <div class="form-group form-span-2"><label>Message Text *</label><textarea name="message" rows="2" required>Dear Patient, your consultation/report update from See Curavite Hospital Management is ready.</textarea></div>
         <div class="form-actions"><button type="submit" class="btn btn-success">Dispatch Notification</button></div>
       </form>
     </div>

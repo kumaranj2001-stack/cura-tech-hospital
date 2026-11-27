@@ -1,7 +1,7 @@
 /**
  * Optional Supabase Configuration Reference
  * -----------------------------------------
- * The live Guru Hospital (Nalam+ ERP) application runs out-of-the-box on
+ * The live See Curavite Hospital Management application runs out-of-the-box on
  * Local Sandbox or Firebase (Free Spark Tier: Auth + Firestore + Hosting) and
  * deploys cleanly on Vercel. If you later migrate to Supabase PostgreSQL using
  * `database/schema.sql`, fill in your Supabase project credentials here.

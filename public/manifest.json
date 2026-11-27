@@ -1,14 +1,14 @@
 {
-  "name": "Guru Hospital — Nalam+ ERP",
-  "short_name": "Guru Nalam+",
-  "description": "Guru Hospital (Nalam+) Enterprise Hospital, Lab, Pharmacy & Billing ERP",
+  "name": "See Curavite Hospital Management",
+  "short_name": "See Curavite",
+  "description": "See Curavite Hospital Management — Complete Hospital, Pharmacy, Lab & Billing ERP",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#2b2d30",
-  "theme_color": "#1d6fe2",
+  "background_color": "#1e1b4b",
+  "theme_color": "#2563eb",
   "icons": [
     {
-      "src": "/assets/icon.svg",
+      "src": "./assets/icon.svg",
       "sizes": "any",
       "type": "image/svg+xml"
     }

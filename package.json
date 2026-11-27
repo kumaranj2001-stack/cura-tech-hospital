@@ -1,7 +1,7 @@
 {
-  "name": "guru-hospital-nalam-erp",
-  "version": "2.1.0",
-  "description": "Guru Hospital (Nalam+ ERP) - Complete Responsive Hospital Management, Pharmacy, Lab & Billing Web App (Vercel + Firebase Free Tier)",
+  "name": "see-curavite-hospital-management",
+  "version": "2.2.0",
+  "description": "See Curavite Hospital Management - Complete Responsive Hospital, Pharmacy, Lab & Billing ERP Web App (Vercel + Firebase Free Tier)",
   "private": true,
   "type": "module",
   "scripts": {

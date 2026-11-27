@@ -6,7 +6,7 @@
 import { firebaseConfig, isFirebaseConfigured } from "./firebase-config.js";
 import { INITIAL_SANDBOX_USERS, buildSampleSeedCollections } from "./seed-data.js";
 
-const SANDBOX_STORAGE_KEY = "guruhospital_nalam_sandbox_v1";
+const SANDBOX_STORAGE_KEY = "curavite_erp_sandbox_v1";
 const collectionListeners = new Map();
 
 let firebaseContext = null;
@@ -31,7 +31,7 @@ function loadSandboxStore() {
   const seed = buildSampleSeedCollections(todayISO());
   const initial = {
     users: [...INITIAL_SANDBOX_USERS],
-    sequences: { GH: 1003, OP: 102, IP: 1, RX: 1, PHB: 1, GRN: 1, LAB: 1, INV: 2, CERT: 0, GP: 0, DOC: 0 },
+    sequences: { CVH: 1003, OP: 102, IP: 1, RX: 1, PHB: 1, GRN: 1, LAB: 1, INV: 2, CERT: 0, GP: 0, DOC: 0 },
     ...seed
   };
   saveSandboxStore(initial);
@@ -198,7 +198,7 @@ export async function nextSequence(prefix) {
   const seqRef = fsMod.doc(db, "settings", "sequences");
   const snap = await fsMod.getDoc(seqRef);
   const data = snap.exists() ? snap.data() : {};
-  const defaultStart = prefix === "GH" ? 1003 : 0;
+  const defaultStart = prefix === "CVH" ? 1003 : 0;
   const next = (Number(data[prefix]) || defaultStart) + 1;
   await fsMod.setDoc(seqRef, { [prefix]: next }, { merge: true });
   return `${prefix}-${year}-${String(next).padStart(4, "0")}`;

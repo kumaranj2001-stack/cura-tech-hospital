@@ -1,5 +1,5 @@
 /**
- * Facility Hub, Nalam+ User/HR/About, Certificates, Equipments,
+ * Facility Hub, See Curavite User/HR/About, Certificates, Equipments,
  * Physiotherapy, General Store, Ambulance Fleet & Skin Aesthetics Modules.
  */
 import * as db from "../db.js";
@@ -29,9 +29,9 @@ export async function renderOperationsView(viewId, container, params = {}, openV
       return renderChangePassword(container);
     case "employee_leave":
       return renderLeaveRequest(container);
-    case "about_nalam":
+    case "about_curavite":
       return renderAboutSystem(container);
-    case "ask_nalam":
+    case "ask_curavite":
       return renderAskSupport(container);
     case "cert_issue":
     case "cert_register":
@@ -81,7 +81,7 @@ async function renderExecutiveDashboard(container, openViewFn) {
   container.innerHTML = `
     <div class="module-header">
       <div>
-        <h2>Executive Facility &amp; Operations Dashboard — Guru Hospital</h2>
+        <h2>Executive Facility &amp; Operations Dashboard — See Curavite Hospital Management</h2>
         <p>Live clinical queue, bed occupancy, pharmacy alerts, and revenue overview (${today}).</p>
       </div>
       <div class="module-actions">
@@ -389,11 +389,11 @@ async function renderLeaveRequest(container) {
 async function renderAboutSystem(container) {
   const cfg = await db.getHospitalSettings();
   container.innerHTML = `
-    <div class="module-header"><div><h2>About Nalam+ — Guru Hospital ERP</h2></div></div>
+    <div class="module-header"><div><h2>About See Curavite Hospital Management</h2></div></div>
     <div class="card">
       <p><strong>Hospital:</strong> ${esc(cfg.hospitalName)}</p>
-      <p><strong>Platform Edition:</strong> Nalam+ Web Enterprise v2.1 (Responsive HTML5 + CSS3 + ES6 JavaScript + Firebase Free Tier + Vercel Ready)</p>
-      <p><strong>Modules Active:</strong> 16 Departmental Ribbons + Facility Hub (Patient, Doctor, Lab, Pharmacy, Cashier, Maintenance, Accounts, Reports, Certificate, Equipments, Admin, Physiotherapy, Store, Ambulance, Skin)</p>
+      <p><strong>Platform Edition:</strong> See Curavite Web Enterprise v2.2 (Vibrant Responsive HTML5 + CSS3 + ES6 JavaScript + Firebase Free Tier + Vercel Ready)</p>
+      <p><strong>Modules Active:</strong> All 17 Departmental Hubs via Collapsible Side Hamburger Navigation (Facility Hub, See Curavite, Patient, Doctor, Lab, Pharmacy, Cashier, Maintenance, Accounts, Reports, Certificate, Equipments, Admin, Physiotherapy, Store, Ambulance, Skin)</p>
       <p><strong>Security Model:</strong> Session-only authentication (auto-logout on exit &amp; inactivity timer), Granular Admin/Staff RBAC, and Cloud Firestore Security Rules.</p>
     </div>
   `;
@@ -401,7 +401,7 @@ async function renderAboutSystem(container) {
 
 async function renderAskSupport(container) {
   container.innerHTML = `
-    <div class="module-header"><div><h2>Ask Nalam — Internal Technical Helpdesk</h2></div></div>
+    <div class="module-header"><div><h2>Ask Curavite — Internal Technical Helpdesk</h2></div></div>
     <div class="card" style="max-width:620px;">
       <form id="ask-form" class="form-grid">
         <div class="form-group form-span-2"><label>Subject *</label><input name="subject" required placeholder="e.g. Printer config / New medicine GST slab" /></div>

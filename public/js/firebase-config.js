@@ -17,7 +17,7 @@ export const firebaseConfig = {
 };
 
 /** Default domain suffix appended when users sign in with a short username */
-export const USERNAME_EMAIL_DOMAIN = "guruhospital.in";
+export const USERNAME_EMAIL_DOMAIN = "curavite.hospital";
 
 export function isFirebaseConfigured() {
   return Boolean(

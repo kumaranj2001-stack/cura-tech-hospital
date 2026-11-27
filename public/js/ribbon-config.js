@@ -1,27 +1,27 @@
 /**
- * Complete Multi-Departmental Ribbon Definition for Guru Hospital (Nalam+ ERP)
- * Matches all 16 departmental tabs + far-left glossy blue App button,
- * including every section, large button, stacked column, and dropdown menu.
+ * Complete Multi-Departmental Navigation Definition for See Curavite Hospital Management
+ * Preserves all 17 departmental groups and every single section, button, stacked command,
+ * and nested submenu item for the collapsible side hamburger navigation.
  */
 
 export const RIBBON_TABS = [
-  { id: "app_home", label: "Facility Hub", isAppButton: true, perm: "app_home" },
-  { id: "nalam", label: "Nalam+", perm: "nalam" },
-  { id: "patient", label: "Patient", perm: "patient" },
-  { id: "doctor", label: "Doctor", perm: "doctor" },
-  { id: "lab", label: "Lab", perm: "lab" },
-  { id: "pharmacy", label: "Pharmacy", perm: "pharmacy" },
-  { id: "cashier", label: "Cashier", perm: "cashier" },
-  { id: "maintenance", label: "Maintenance", perm: "maintenance" },
-  { id: "accounts", label: "Accounts", perm: "accounts" },
-  { id: "reports", label: "Reports", perm: "reports" },
-  { id: "certificate", label: "Certificate", perm: "certificate" },
-  { id: "equipments", label: "Equipments", perm: "equipments" },
-  { id: "admin", label: "Admin", perm: "admin" },
-  { id: "physiotherapy", label: "Physiotherapy", perm: "physiotherapy" },
-  { id: "store", label: "Store", perm: "store" },
-  { id: "ambulance", label: "Ambulance", perm: "ambulance" },
-  { id: "skin", label: "Skin", perm: "skin" }
+  { id: "app_home", label: "Facility Hub", isAppButton: true, perm: "app_home", icon: "dashboard", tone: "teal", glow: "linear-gradient(135deg, #0ea5e9, #10b981)" },
+  { id: "curavite", label: "See Curavite", perm: "curavite", icon: "sms", tone: "blue", glow: "linear-gradient(135deg, #3b82f6, #6366f1)" },
+  { id: "patient", label: "Patient", perm: "patient", icon: "user-add", tone: "green", glow: "linear-gradient(135deg, #10b981, #06b6d4)" },
+  { id: "doctor", label: "Doctor", perm: "doctor", icon: "doctor", tone: "purple", glow: "linear-gradient(135deg, #8b5cf6, #ec4899)" },
+  { id: "lab", label: "Lab", perm: "lab", icon: "lab", tone: "teal", glow: "linear-gradient(135deg, #06b6d4, #3b82f6)" },
+  { id: "pharmacy", label: "Pharmacy", perm: "pharmacy", icon: "pharmacy", tone: "green", glow: "linear-gradient(135deg, #22c55e, #0d9488)" },
+  { id: "cashier", label: "Cashier", perm: "cashier", icon: "cash", tone: "amber", glow: "linear-gradient(135deg, #f59e0b, #ea580c)" },
+  { id: "maintenance", label: "Maintenance", perm: "maintenance", icon: "gear", tone: "purple", glow: "linear-gradient(135deg, #6366f1, #8b5cf6)" },
+  { id: "accounts", label: "Accounts", perm: "accounts", icon: "cash", tone: "teal", glow: "linear-gradient(135deg, #0d9488, #2563eb)" },
+  { id: "reports", label: "Reports", perm: "reports", icon: "report", tone: "blue", glow: "linear-gradient(135deg, #2563eb, #06b6d4)" },
+  { id: "certificate", label: "Certificate", perm: "certificate", icon: "cert", tone: "amber", glow: "linear-gradient(135deg, #f59e0b, #ec4899)" },
+  { id: "equipments", label: "Equipments", perm: "equipments", icon: "gear", tone: "blue", glow: "linear-gradient(135deg, #0284c7, #4f46e5)" },
+  { id: "admin", label: "Admin", perm: "admin", icon: "lock", tone: "red", glow: "linear-gradient(135deg, #f43f5e, #9333ea)" },
+  { id: "physiotherapy", label: "Physiotherapy", perm: "physiotherapy", icon: "users", tone: "green", glow: "linear-gradient(135deg, #14b8a6, #84cc16)" },
+  { id: "store", label: "Store", perm: "store", icon: "truck", tone: "amber", glow: "linear-gradient(135deg, #f97316, #eab308)" },
+  { id: "ambulance", label: "Ambulance", perm: "ambulance", icon: "truck", tone: "red", glow: "linear-gradient(135deg, #ef4444, #f97316)" },
+  { id: "skin", label: "Skin", perm: "skin", icon: "doctor", tone: "purple", glow: "linear-gradient(135deg, #ec4899, #8b5cf6)" }
 ];
 
 const btn = (label, viewId, icon = "doc", tone = "blue", params = {}, perm = null) => ({
@@ -35,7 +35,7 @@ const dd = (label, icon, tone, items, perm = null) => ({
 export const RIBBON_CONFIG = {
   app_home: [
     {
-      label: "",
+      label: "Executive",
       items: [
         { kind: "large", ...btn("Dashboard", "exec_dashboard", "dashboard", "green") }
       ]
@@ -70,7 +70,7 @@ export const RIBBON_CONFIG = {
     }
   ],
 
-  nalam: [
+  curavite: [
     {
       label: "User & HR",
       items: [
@@ -82,8 +82,8 @@ export const RIBBON_CONFIG = {
     {
       label: "About us",
       items: [
-        { kind: "large", ...btn("Nalam+", "about_nalam", "dashboard", "blue") },
-        { kind: "large", ...btn("Ask Nalam", "ask_nalam", "sms", "green") }
+        { kind: "large", ...btn("See Curavite Hospital Management", "about_curavite", "dashboard", "blue") },
+        { kind: "large", ...btn("Ask Curavite", "ask_curavite", "sms", "green") }
       ]
     }
   ],
@@ -820,3 +820,22 @@ export const RIBBON_CONFIG = {
     }
   ]
 };
+
+/**
+ * Normalizes a department's sections & nested items into a flat tree model
+ * so the collapsible side hamburger menu renders 100% of every action without omission.
+ */
+export function buildDepartmentMenuSections(tabId) {
+  const sections = RIBBON_CONFIG[tabId] || [];
+  return sections.map((sec) => {
+    const entries = [];
+    for (const item of sec.items || []) {
+      if (item.kind === "stack") {
+        for (const r of item.rows || []) entries.push(r);
+      } else {
+        entries.push(item);
+      }
+    }
+    return { label: sec.label || "", entries };
+  });
+}

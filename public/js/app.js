@@ -1,9 +1,9 @@
 /**
- * Guru Hospital (Nalam+ ERP) — Application Shell, Ribbon Engine & Multi-Tab Workspace Router
+ * See Curavite Hospital Management — Application Shell, Collapsible Side Hamburger Menu & Multi-Tab Workspace Router
  */
 import * as db from "./db.js";
 import * as auth from "./auth.js";
-import { RIBBON_TABS, RIBBON_CONFIG } from "./ribbon-config.js";
+import { RIBBON_TABS, buildDepartmentMenuSections } from "./ribbon-config.js";
 import { esc, formatOperationalDate, getRibbonIconSvg, toast } from "./ui.js";
 
 import { renderAdminView } from "./modules/admin.js";
@@ -17,7 +17,10 @@ import { renderMasterCatalogView } from "./modules/masters.js";
 import { renderEnterpriseReport } from "./modules/reports.js";
 import { renderOperationsView } from "./modules/operations.js";
 
-let activeRibbonTab = "app_home";
+const expandedDepts = new Set(["app_home"]);
+const expandedSubMenus = new Set();
+let expandAllMode = false;
+let menuSearchQuery = "";
 let openWorkspaceTabs = [];
 let activeWorkspaceKey = null;
 let sessionStrictOverride = false;
@@ -27,12 +30,35 @@ const elLoginScreen = document.getElementById("login-screen");
 const elAppShell = document.getElementById("app-shell");
 const elLoginForm = document.getElementById("login-form");
 const elLoginError = document.getElementById("login-error");
-const elDropdown = document.getElementById("ribbon-dropdown");
+const elSideNav = document.getElementById("side-nav");
+const elSideBackdrop = document.getElementById("side-backdrop");
+const elSideList = document.getElementById("side-nav-list");
 
 function formatClockSeconds(sec) {
   const m = Math.floor(sec / 60);
   const s = sec % 60;
   return `Auto-lock ${m}:${String(s).padStart(2, "0")}`;
+}
+
+function isMobileViewport() {
+  return window.innerWidth <= 1024;
+}
+
+function closeMobileDrawer() {
+  elSideNav?.classList.remove("mobile-open");
+  elSideBackdrop?.classList.remove("visible");
+}
+
+function toggleHamburgerMenu() {
+  if (isMobileViewport()) {
+    const opening = !elSideNav.classList.contains("mobile-open");
+    elSideNav.classList.toggle("mobile-open", opening);
+    elSideBackdrop.classList.toggle("visible", opening);
+    document.getElementById("hamburger-toggle-btn")?.setAttribute("aria-expanded", String(opening));
+  } else {
+    const collapsed = elSideNav.classList.toggle("collapsed");
+    document.getElementById("hamburger-toggle-btn")?.setAttribute("aria-expanded", String(!collapsed));
+  }
 }
 
 async function boot() {
@@ -77,7 +103,7 @@ async function boot() {
       elLoginError.classList.remove("hidden");
     } finally {
       btn.disabled = false;
-      btn.textContent = "Sign In to Guru Hospital ERP";
+      btn.textContent = "Sign In to See Curavite Hospital Management";
     }
   };
 
@@ -93,7 +119,7 @@ async function enterWorkspace(user) {
 
   const settings = await db.getHospitalSettings();
   document.getElementById("header-brand-title").textContent =
-    `${settings.hospitalName || "Guru Hospital — Nalam+"} (${formatOperationalDate()})`;
+    `${settings.hospitalName || "See Curavite Hospital Management"} (${formatOperationalDate()})`;
   document.getElementById("welcome-user-text").textContent =
     `Welcome ${String(user.fullName || user.username).toUpperCase()}`;
 
@@ -114,16 +140,17 @@ async function enterWorkspace(user) {
   });
 
   bindShellEvents();
-  activeRibbonTab = "app_home";
   openWorkspaceTabs = [];
-  renderRibbonChrome();
+  expandedDepts.clear();
+  expandedDepts.add("app_home");
+  renderSideNavigation();
   openWorkspaceView("exec_dashboard", "Dashboard", {});
 }
 
 function showLoginScreen(reason) {
   elAppShell.classList.add("hidden");
   elLoginScreen.classList.remove("hidden");
-  elDropdown.classList.add("hidden");
+  closeMobileDrawer();
   openWorkspaceTabs = [];
   activeWorkspaceKey = null;
   if (reason && reason !== "User logged off" && reason !== "User clicked Log Off") {
@@ -136,142 +163,186 @@ function bindShellEvents() {
   shellEventsBound = true;
 
   document.getElementById("header-logout-btn").onclick = () => auth.signOut("User logged off");
-  document.getElementById("header-toggle-ribbon").onclick = () => {
-    document.getElementById("ribbon-toolbar").classList.toggle("collapsed");
+  document.getElementById("hamburger-toggle-btn").onclick = toggleHamburgerMenu;
+  elSideBackdrop.onclick = closeMobileDrawer;
+
+  document.getElementById("side-menu-search").oninput = (e) => {
+    menuSearchQuery = e.target.value.trim().toLowerCase();
+    renderSideNavigation();
   };
-  document.getElementById("app-home-btn").onclick = () => {
-    activeRibbonTab = "app_home";
-    document.getElementById("ribbon-toolbar").classList.remove("collapsed");
-    renderRibbonChrome();
-  };
-  document.addEventListener("click", (e) => {
-    if (!e.target.closest(".ribbon-dropdown") && !e.target.closest("[data-has-dd]")) {
-      elDropdown.classList.add("hidden");
+
+  document.getElementById("side-expand-all-btn").onclick = (e) => {
+    expandAllMode = !expandAllMode;
+    e.target.textContent = expandAllMode ? "Collapse All" : "Expand All";
+    expandedDepts.clear();
+    if (expandAllMode) {
+      RIBBON_TABS.forEach((t) => {
+        if (auth.hasPermission(t.perm)) expandedDepts.add(t.id);
+      });
+    } else {
+      expandedDepts.add("app_home");
     }
-  });
+    renderSideNavigation();
+  };
 }
 
-function selectRibbonTab(tabId) {
-  const tabDef = RIBBON_TABS.find((t) => t.id === tabId);
-  if (tabDef && !auth.hasPermission(tabDef.perm)) {
-    toast(`Access Restricted: "${tabDef.label}" requires Admin permission.`, "error");
-    return false;
+function countTabCommands(sections) {
+  let n = 0;
+  for (const s of sections) {
+    for (const e of s.entries) {
+      if (e.type === "dropdown") n += (e.items || []).length;
+      else n += 1;
+    }
   }
-  activeRibbonTab = tabId;
-  document.getElementById("ribbon-toolbar").classList.remove("collapsed");
-  renderRibbonChrome();
-  return true;
+  return n;
 }
 
-function renderRibbonChrome() {
-  const appBtn = document.getElementById("app-home-btn");
-  appBtn.classList.toggle("active", activeRibbonTab === "app_home");
+function renderSideNavigation() {
+  const q = menuSearchQuery;
 
-  const tabsContainer = document.getElementById("ribbon-tabs-scroll");
-  tabsContainer.innerHTML = RIBBON_TABS.filter((t) => !t.isAppButton).map((tab) => {
-    const allowed = auth.hasPermission(tab.perm);
-    const activeCls = activeRibbonTab === tab.id ? "active" : "";
-    const lockCls = allowed ? "" : "locked";
-    return `<button type="button" class="ribbon-tab ${activeCls} ${lockCls}" data-rtab="${esc(tab.id)}" title="${allowed ? tab.label : "Restricted — Admin permission required"}">${esc(tab.label)}${allowed ? "" : " 🔒"}</button>`;
+  const html = RIBBON_TABS.map((tab) => {
+    const tabAllowed = auth.hasPermission(tab.perm);
+    const sections = buildDepartmentMenuSections(tab.id);
+    const totalCount = countTabCommands(sections);
+
+    // Filter sections/items if user typed in sidebar search box
+    const filteredSections = sections.map((sec) => {
+      const matchedEntries = [];
+      for (const entry of sec.entries) {
+        if (entry.type === "dropdown") {
+          const parentMatch = !q || entry.label.toLowerCase().includes(q) || tab.label.toLowerCase().includes(q);
+          const childMatches = (entry.items || []).filter((sub) =>
+            !q || parentMatch || sub.label.toLowerCase().includes(q)
+          );
+          if (childMatches.length > 0) {
+            matchedEntries.push({ ...entry, items: childMatches });
+          }
+        } else if (!q || entry.label.toLowerCase().includes(q) || sec.label.toLowerCase().includes(q) || tab.label.toLowerCase().includes(q)) {
+          matchedEntries.push(entry);
+        }
+      }
+      return { ...sec, entries: matchedEntries };
+    }).filter((sec) => sec.entries.length > 0);
+
+    if (q && filteredSections.length === 0) return "";
+
+    const isOpen = q ? true : expandedDepts.has(tab.id);
+    const bodyHtml = filteredSections.map((sec) => {
+      const secTitle = sec.label ? `<div class="side-section-label">${esc(sec.label)}</div>` : "";
+      const itemsHtml = sec.entries.map((entry, idx) => {
+        if (entry.type === "dropdown") {
+          const subKey = `${tab.id}::${sec.label}::${entry.label}::${idx}`;
+          const subAllowed = !entry.perm || auth.hasPermission(entry.perm);
+          const subOpen = q ? true : expandedSubMenus.has(subKey);
+          const subRowsHtml = (entry.items || []).map((sub) => {
+            const itemAllowed = subAllowed && (!sub.perm || auth.hasPermission(sub.perm));
+            const cmdKey = `${sub.viewId}::${JSON.stringify(sub.params || {})}`;
+            const activeCls = activeWorkspaceKey === cmdKey ? "active" : "";
+            const payload = esc(JSON.stringify(sub));
+            return `
+              <button type="button" class="side-item-btn ${activeCls} ${itemAllowed ? "" : "locked"}" data-side-cmd='${payload}'>
+                <span class="side-item-label">${esc(sub.label)}</span>
+                ${itemAllowed ? "" : "<span>🔒</span>"}
+              </button>
+            `;
+          }).join("");
+
+          return `
+            <div class="side-sub-group ${subOpen ? "open" : ""}">
+              <button type="button" class="side-sub-toggle ${subAllowed ? "" : "locked"}" data-sub-toggle="${esc(subKey)}" data-sub-perm="${esc(entry.perm || "")}">
+                ${getRibbonIconSvg(entry.icon, entry.tone)}
+                <span class="side-item-label">${esc(entry.label)}</span>
+                ${subAllowed ? "" : "<span>🔒</span>"}
+                <span class="side-sub-caret">&#9654;</span>
+              </button>
+              <div class="side-sub-items">${subRowsHtml}</div>
+            </div>
+          `;
+        }
+
+        const allowed = !entry.perm || auth.hasPermission(entry.perm);
+        const cmdKey = `${entry.viewId}::${JSON.stringify(entry.params || {})}`;
+        const activeCls = activeWorkspaceKey === cmdKey ? "active" : "";
+        const payload = esc(JSON.stringify(entry));
+        return `
+          <button type="button" class="side-item-btn ${activeCls} ${allowed ? "" : "locked"}" data-side-cmd='${payload}'>
+            ${getRibbonIconSvg(entry.icon, entry.tone)}
+            <span class="side-item-label">${esc(entry.label)}</span>
+            ${allowed ? "" : "<span>🔒</span>"}
+          </button>
+        `;
+      }).join("");
+
+      return `${secTitle}${itemsHtml}`;
+    }).join("");
+
+    return `
+      <div class="side-dept ${isOpen ? "open" : ""} ${tabAllowed ? "" : "locked"}" data-dept="${esc(tab.id)}">
+        <button type="button" class="side-dept-btn" data-dept-toggle="${esc(tab.id)}" title="${esc(tab.label)}">
+          <span class="side-dept-icon" style="--dept-glow:${tab.glow};">
+            ${getRibbonIconSvg(tab.icon, "blue")}
+          </span>
+          <span class="side-dept-label">${esc(tab.label)}</span>
+          ${tabAllowed ? `<span class="side-dept-count">${totalCount}</span>` : `<span>🔒</span>`}
+          <span class="side-dept-chevron">&#9654;</span>
+        </button>
+        <div class="side-dept-body">${bodyHtml}</div>
+      </div>
+    `;
   }).join("");
 
-  tabsContainer.querySelectorAll(".ribbon-tab").forEach((btn) => {
-    btn.onclick = () => selectRibbonTab(btn.dataset.rtab);
+  elSideList.innerHTML = html || `<div style="padding:14px;color:#94a3b8;font-size:12px;">No menu options match "${esc(menuSearchQuery)}".</div>`;
+
+  // Department accordion handlers
+  elSideList.querySelectorAll("[data-dept-toggle]").forEach((btn) => {
+    btn.onclick = () => {
+      const deptId = btn.dataset.deptToggle;
+      const tabDef = RIBBON_TABS.find((t) => t.id === deptId);
+      if (tabDef && !auth.hasPermission(tabDef.perm)) {
+        return toast(`Access Restricted: "${tabDef.label}" requires Admin permission.`, "error");
+      }
+
+      // If desktop sidebar was collapsed to icon-rail, expand it first
+      if (!isMobileViewport() && elSideNav.classList.contains("collapsed")) {
+        elSideNav.classList.remove("collapsed");
+        document.getElementById("hamburger-toggle-btn")?.setAttribute("aria-expanded", "true");
+        expandedDepts.add(deptId);
+      } else if (expandedDepts.has(deptId)) {
+        expandedDepts.delete(deptId);
+      } else {
+        expandedDepts.add(deptId);
+      }
+      renderSideNavigation();
+    };
   });
 
-  // Sync mobile quick department switcher
-  const mobileSel = document.getElementById("mobile-dept-select");
-  if (mobileSel) {
-    mobileSel.innerHTML = RIBBON_TABS.map((tab) => {
-      const allowed = auth.hasPermission(tab.perm);
-      return `<option value="${esc(tab.id)}" ${tab.id === activeRibbonTab ? "selected" : ""} ${allowed ? "" : "disabled"}>${esc(tab.label)}${allowed ? "" : " (Restricted)"}</option>`;
-    }).join("");
-    mobileSel.onchange = (e) => {
-      if (!selectRibbonTab(e.target.value)) {
-        e.target.value = activeRibbonTab;
+  // Nested dropdown submenu toggle handlers
+  elSideList.querySelectorAll("[data-sub-toggle]").forEach((btn) => {
+    btn.onclick = () => {
+      const perm = btn.dataset.subPerm;
+      if (perm && !auth.hasPermission(perm)) {
+        return toast("Permission required: Restricted for your role.", "error");
       }
+      const key = btn.dataset.subToggle;
+      if (expandedSubMenus.has(key)) expandedSubMenus.delete(key);
+      else expandedSubMenus.add(key);
+      renderSideNavigation();
     };
-  }
+  });
 
-  renderRibbonSections(activeRibbonTab);
-}
-
-function renderRibbonSections(tabId) {
-  const sections = RIBBON_CONFIG[tabId] || [];
-  const slot = document.getElementById("ribbon-sections");
-
-  const renderCommand = (item, isSmall) => {
-    const allowed = !item.perm || auth.hasPermission(item.perm);
-    const lockCls = allowed ? "" : "rb-locked";
-    const cls = isSmall ? `rb-small-btn ${lockCls}` : `rb-large-btn ${lockCls}`;
-    const caret = item.type === "dropdown" ? `<span class="rb-caret">▼</span>` : "";
-    const ddAttr = item.type === "dropdown" ? `data-has-dd="1"` : "";
-    const payload = esc(JSON.stringify(item));
-    return `
-      <button type="button" class="${cls}" ${ddAttr} data-cmd='${payload}' title="${allowed ? item.label : "Restricted by RBAC"}">
-        ${getRibbonIconSvg(item.icon, item.tone)}
-        <span>${esc(item.label)}${caret}</span>
-      </button>
-    `;
-  };
-
-  slot.innerHTML = sections.map((sec) => `
-    <div class="ribbon-group">
-      <div class="ribbon-group-items">
-        ${sec.items.map((entry) => {
-          if (entry.kind === "stack") {
-            return `<div class="rb-stack-col">${entry.rows.map((r) => renderCommand(r, true)).join("")}</div>`;
-          }
-          return renderCommand(entry, false);
-        }).join("")}
-      </div>
-      ${sec.label ? `<div class="ribbon-group-label">${esc(sec.label)}</div>` : `<div class="ribbon-group-label">&nbsp;</div>`}
-    </div>
-  `).join("");
-
-  slot.querySelectorAll("button[data-cmd]").forEach((btn) => {
-    btn.onclick = (e) => {
-      e.stopPropagation();
-      const cmd = JSON.parse(btn.dataset.cmd);
+  // Leaf menu action handlers
+  elSideList.querySelectorAll("[data-side-cmd]").forEach((btn) => {
+    btn.onclick = () => {
+      const cmd = JSON.parse(btn.dataset.sideCmd);
       if (cmd.perm && !auth.hasPermission(cmd.perm)) {
         return toast(`Permission required: ${cmd.label} is restricted for your role.`, "error");
       }
-      if (cmd.type === "dropdown") {
-        openRibbonDropdown(btn, cmd.items || []);
-      } else {
-        elDropdown.classList.add("hidden");
-        if (cmd.viewId === "action_logoff") {
-          auth.signOut("User clicked Log Off");
-          return;
-        }
-        openWorkspaceView(cmd.viewId, cmd.label, cmd.params || {});
+      if (cmd.viewId === "action_logoff") {
+        auth.signOut("User clicked Log Off");
+        return;
       }
-    };
-  });
-}
-
-function openRibbonDropdown(anchorEl, items) {
-  const rect = anchorEl.getBoundingClientRect();
-  elDropdown.innerHTML = items.map((it, idx) => {
-    const allowed = !it.perm || auth.hasPermission(it.perm);
-    return `<button type="button" class="ribbon-dropdown-item ${allowed ? "" : "rb-locked"}" data-dd-idx="${idx}"><span>${esc(it.label)}</span>${allowed ? "" : "<span>🔒</span>"}</button>`;
-  }).join("");
-  elDropdown.classList.remove("hidden");
-
-  const ddWidth = Math.min(240, window.innerWidth - 16);
-  const left = Math.max(8, Math.min(rect.left, window.innerWidth - ddWidth - 8));
-  const top = Math.min(rect.bottom + 4, window.innerHeight - 160);
-  elDropdown.style.left = `${left}px`;
-  elDropdown.style.top = `${top}px`;
-
-  elDropdown.querySelectorAll(".ribbon-dropdown-item").forEach((el) => {
-    el.onclick = () => {
-      const it = items[Number(el.dataset.ddIdx)];
-      if (it.perm && !auth.hasPermission(it.perm)) {
-        return toast(`Restricted: ${it.label} requires Admin permission.`, "error");
-      }
-      elDropdown.classList.add("hidden");
-      openWorkspaceView(it.viewId, it.label, it.params || {});
+      openWorkspaceView(cmd.viewId, cmd.label, cmd.params || {});
+      if (isMobileViewport()) closeMobileDrawer();
     };
   });
 }
@@ -285,6 +356,7 @@ export function openWorkspaceView(viewId, title, params = {}) {
   }
   activeWorkspaceKey = key;
   renderWorkspaceTabs();
+  renderSideNavigation();
   renderActiveWorkspaceContent();
 }
 
@@ -306,11 +378,13 @@ function renderWorkspaceTabs() {
           activeWorkspaceKey = openWorkspaceTabs[openWorkspaceTabs.length - 1]?.key || null;
         }
         renderWorkspaceTabs();
+        renderSideNavigation();
         renderActiveWorkspaceContent();
         return;
       }
       activeWorkspaceKey = el.dataset.wkey;
       renderWorkspaceTabs();
+      renderSideNavigation();
       renderActiveWorkspaceContent();
     };
   });
@@ -320,7 +394,7 @@ async function renderActiveWorkspaceContent() {
   const body = document.getElementById("workspace-body");
   const current = openWorkspaceTabs.find((t) => t.key === activeWorkspaceKey);
   if (!current) {
-    body.innerHTML = `<div class="card"><h3 class="card-title">Guru Hospital — Nalam+ Workspace</h3><p>Select any action button from the ribbon toolbar above to open a module tab.</p></div>`;
+    body.innerHTML = `<div class="card"><h3 class="card-title">See Curavite Hospital Management</h3><p>Open the side hamburger menu on the left to choose any department module or report.</p></div>`;
     return;
   }
 

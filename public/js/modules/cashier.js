@@ -306,7 +306,7 @@ async function renderCashierReport(container, reportName) {
     ],
     rows,
     exportFileName: `cashier-${reportName.toLowerCase().replace(/\s+/g, "-")}.csv`,
-    printTitle: `Guru Hospital Cashier — ${reportName}`
+    printTitle: `See Curavite Cashier — ${reportName}`
   });
 }
 
@@ -340,7 +340,7 @@ async function renderTallyExport(container, format) {
             <PARTYLEDGERNAME>${esc(b.patientName)}</PARTYLEDGERNAME>
             <NARRATION>${esc(billDept(b))} - ${esc(b.paymentMode)}</NARRATION>
             <ALLLEDGERENTRIES.LIST><LEDGERNAME>${esc(b.paymentMode)}</LEDGERNAME><AMOUNT>-${b.netAmount}</AMOUNT></ALLLEDGERENTRIES.LIST>
-            <ALLLEDGERENTRIES.LIST><LEDGERNAME>Guru Hospital Revenue</LEDGERNAME><AMOUNT>${b.netAmount}</AMOUNT></ALLLEDGERENTRIES.LIST>
+            <ALLLEDGERENTRIES.LIST><LEDGERNAME>See Curavite Hospital Revenue</LEDGERNAME><AMOUNT>${b.netAmount}</AMOUNT></ALLLEDGERENTRIES.LIST>
           </VOUCHER>
         </TALLYMESSAGE>
       `).join("\n");
@@ -354,7 +354,7 @@ async function renderTallyExport(container, format) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `guruhospital-tally-vouchers.${ext}`;
+    a.download = `curavite-tally-vouchers.${ext}`;
     a.click();
     URL.revokeObjectURL(url);
     toast(`Tally ${format} exported.`, "success");

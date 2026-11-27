@@ -5,7 +5,7 @@ import * as db from "./db.js";
 import { firebaseConfig, USERNAME_EMAIL_DOMAIN, isFirebaseConfigured } from "./firebase-config.js";
 import { DEFAULT_ROLE_PERMISSIONS } from "./seed-data.js";
 
-const SESSION_KEY = "guruhospital_active_session_v1";
+const SESSION_KEY = "curavite_active_session_v1";
 
 export const PERMISSION_LABELS = [
   { key: "patient", label: "Patient Reception & IP/OP" },
@@ -60,7 +60,7 @@ export function isAdmin() {
 
 export function hasPermission(permKey) {
   if (!currentUser) return false;
-  if (!permKey || permKey === "app_home" || permKey === "nalam") return true;
+  if (!permKey || permKey === "app_home" || permKey === "curavite") return true;
   if (currentUser.role === "admin") return true;
   return Boolean(currentUser.permissions && currentUser.permissions[permKey]);
 }
@@ -139,7 +139,7 @@ export async function signIn(identifier, password) {
 
   if (profile.active === false) {
     await ctx.authMod.signOut(ctx.auth);
-    throw new Error("This account is deactivated. Contact Guru Hospital Admin.");
+    throw new Error("This account is deactivated. Contact See Curavite Hospital Management Admin.");
   }
 
   currentUser = profile;
@@ -229,7 +229,6 @@ export function startAutoLogoutWatchers({ idleMinutes = 15, strictLogoutOnHide =
       }
     });
 
-    // Clear session token if user closes tab/browser (while keeping refresh working only when same tab reloads if needed)
     window.addEventListener("pagehide", (evt) => {
       if (!evt.persisted && watcherConfig.strictLogoutOnHide && currentUser && !isPrintingFlag) {
         sessionStorage.removeItem(SESSION_KEY);
@@ -286,7 +285,6 @@ export async function createUserAccount({ username, email, fullName, password, r
     return newUser;
   }
 
-  // Firebase mode: secondary app instance keeps current Admin signed in
   const ctx = db.getFirebaseContext();
   const secondaryApp = ctx.appMod.getApps().find((a) => a.name === "AdminUserCreator")
     || ctx.appMod.initializeApp(firebaseConfig, "AdminUserCreator");
@@ -358,7 +356,7 @@ export async function changeOwnPassword(currentPw, newPw) {
     const fresh = await db.getById("users", currentUser.id);
     if (!fresh || fresh.passwordHash !== curHash) throw new Error("Current password is incorrect.");
     await db.update("users", currentUser.id, { passwordHash: await sha256Hex(newPw) });
-    await logAudit("CHANGE_PASSWORD", "Nalam+", `User ${currentUser.username} changed own password`);
+    await logAudit("CHANGE_PASSWORD", "See Curavite", `User ${currentUser.username} changed own password`);
     return true;
   }
 
@@ -367,6 +365,6 @@ export async function changeOwnPassword(currentPw, newPw) {
   const cred = ctx.authMod.EmailAuthProvider.credential(fbUser.email, currentPw);
   await ctx.authMod.reauthenticateWithCredential(fbUser, cred);
   await ctx.authMod.updatePassword(fbUser, newPw);
-  await logAudit("CHANGE_PASSWORD", "Nalam+", `User ${currentUser.username} updated Firebase password`);
+  await logAudit("CHANGE_PASSWORD", "See Curavite", `User ${currentUser.username} updated Firebase password`);
   return true;
 }

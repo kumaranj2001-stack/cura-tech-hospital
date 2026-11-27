@@ -35,7 +35,7 @@ service cloud.firestore {
       allow write: if isAdmin() || (
         isSignedIn()
         && username == 'kumaran'
-        && request.auth.token.email == 'kumaran@guruhospital.in'
+        && request.auth.token.email == 'kumaran@curavite.hospital'
       );
     }
 
@@ -46,7 +46,7 @@ service cloud.firestore {
       allow create: if isAdmin() || (
         isSignedIn()
         && request.auth.uid == userId
-        && request.auth.token.email == 'kumaran@guruhospital.in'
+        && request.auth.token.email == 'kumaran@curavite.hospital'
         && request.resource.data.role == 'admin'
       );
       allow update, delete: if isAdmin();

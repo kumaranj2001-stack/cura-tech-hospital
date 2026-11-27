@@ -70,7 +70,7 @@ async function renderUserManagement(container) {
     ],
     rows: users,
     searchPlaceholder: "Search users by username, name, role...",
-    exportFileName: "guruhospital-users.csv"
+    exportFileName: "curavite-users.csv"
   });
 
   container.querySelector("#btn-new-user").onclick = () => openCreateUserModal(() => renderUserManagement(container));
@@ -120,7 +120,7 @@ function openCreateUserModal(onDone) {
         <div class="form-grid">
           <div class="form-group"><label>Username *</label><input name="username" required placeholder="e.g. nurse_priya" /></div>
           <div class="form-group"><label>Full Name *</label><input name="fullName" required placeholder="e.g. Priya S" /></div>
-          <div class="form-group"><label>Email (optional)</label><input name="email" type="email" placeholder="Auto: username@guruhospital.in" /></div>
+          <div class="form-group"><label>Email (optional)</label><input name="email" type="email" placeholder="Auto: username@curavite.hospital" /></div>
           <div class="form-group"><label>Password (min 6 chars) *</label><input name="password" type="password" minlength="6" required /></div>
           <div class="form-group">
             <label>Role *</label>
@@ -149,7 +149,7 @@ function openCreateUserModal(onDone) {
       slot.querySelector("#create-user-form").onsubmit = async (e) => {
         e.preventDefault();
         const fd = new FormData(e.target);
-        const permissions = { app_home: true, nalam: true };
+        const permissions = { app_home: true, curavite: true };
         slot.querySelectorAll(".perm-chk").forEach((chk) => {
           permissions[chk.value] = chk.checked;
         });
@@ -210,7 +210,7 @@ function openPermissionsModal(user, onDone) {
       slot.querySelector("#edit-perms-form").onsubmit = async (e) => {
         e.preventDefault();
         const fd = new FormData(e.target);
-        const permissions = { app_home: true, nalam: true };
+        const permissions = { app_home: true, curavite: true };
         slot.querySelectorAll(".perm-chk").forEach((chk) => {
           permissions[chk.value] = chk.checked;
         });
@@ -398,13 +398,13 @@ async function renderSystemSettings(container) {
     <div class="module-header">
       <div>
         <h2>System, Security &amp; Inventory Settings (Admin Only)</h2>
-        <p>Configure Guru Hospital profile, auto-logout timers, pharmacy reorder thresholds, and SMS webhooks.</p>
+        <p>Configure See Curavite Hospital Management profile, auto-logout timers, pharmacy reorder thresholds, and SMS webhooks.</p>
       </div>
     </div>
     <div class="card">
       <form id="settings-form" class="form-grid">
         <div class="form-group"><label>Hospital / System Title</label><input name="hospitalName" value="${esc(cfg.hospitalName)}" required /></div>
-        <div class="form-group"><label>UHID Prefix</label><input name="uhidPrefix" value="${esc(cfg.uhidPrefix || "GH")}" required /></div>
+        <div class="form-group"><label>UHID Prefix</label><input name="uhidPrefix" value="${esc(cfg.uhidPrefix || "CVH")}" required /></div>
         <div class="form-group form-span-2"><label>Hospital Address</label><input name="address" value="${esc(cfg.address)}" /></div>
         <div class="form-group"><label>Contact Phone</label><input name="phone" value="${esc(cfg.phone)}" /></div>
         <div class="form-group"><label>GSTIN</label><input name="gstin" value="${esc(cfg.gstin)}" /></div>
@@ -525,10 +525,10 @@ async function renderLeaveApprovals(container) {
 }
 
 async function renderSupportInbox(container) {
-  auth.requirePermission("admin", "view Ask Nalam helpdesk tickets");
+  auth.requirePermission("admin", "view Ask Curavite helpdesk tickets");
   const tickets = await db.list("support_tickets");
   container.innerHTML = `
-    <div class="module-header"><div><h2>Ask Nalam Internal Helpdesk Inbox</h2></div></div>
+    <div class="module-header"><div><h2>Ask Curavite Internal Helpdesk Inbox</h2></div></div>
     <div class="card"><div id="tickets-tbl"></div></div>
   `;
   mountDataTable(container.querySelector("#tickets-tbl"), {

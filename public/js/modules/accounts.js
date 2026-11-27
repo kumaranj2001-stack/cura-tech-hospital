@@ -97,7 +97,7 @@ async function renderCashCloseLog(container) {
     ],
     rows: closes,
     exportFileName: "cash-close-log.csv",
-    printTitle: "Guru Hospital — Final Cash Close Audit Log"
+    printTitle: "See Curavite Hospital Management — Final Cash Close Audit Log"
   });
 }
 
@@ -250,7 +250,7 @@ async function renderAccountsReport(container, type) {
       : [{ key: "id", label: "Bill ID" }, { key: "billDate", label: "Date" }, { key: "patientName", label: "Patient" }, { key: "netAmount", label: "Net Amt", render: (r) => money(r.netAmount) }, { key: "paymentMode", label: "Mode" }],
     rows,
     exportFileName: `accounts-${type}.csv`,
-    printTitle: `Guru Hospital Accounts — ${type.toUpperCase()}`
+    printTitle: `See Curavite Accounts — ${type.toUpperCase()}`
   });
 }
 

@@ -1,5 +1,5 @@
 /**
- * Initial seed dataset for Guru Hospital (Nalam+ ERP).
+ * Initial seed dataset for See Curavite Hospital Management.
  * Used automatically in Local Sandbox mode and available via
  * Admin -> System Settings -> "Seed Sample Hospital Data" for fresh Firestore.
  */
@@ -7,7 +7,7 @@
 export const DEFAULT_ROLE_PERMISSIONS = {
   admin: {
     app_home: true,
-    nalam: true,
+    curavite: true,
     patient: true,
     doctor: true,
     lab: true,
@@ -31,7 +31,7 @@ export const DEFAULT_ROLE_PERMISSIONS = {
   },
   staff: {
     app_home: true,
-    nalam: true,
+    curavite: true,
     patient: true,
     doctor: false,
     lab: true,
@@ -59,7 +59,7 @@ export const INITIAL_SANDBOX_USERS = [
   {
     id: "uid_kumaran",
     username: "kumaran",
-    email: "kumaran@guruhospital.in",
+    email: "kumaran@curavite.hospital",
     fullName: "KUMARAN",
     role: "admin",
     department: "Administration",
@@ -71,7 +71,7 @@ export const INITIAL_SANDBOX_USERS = [
   {
     id: "uid_staff123",
     username: "staff123",
-    email: "staff123@guruhospital.in",
+    email: "staff123@curavite.hospital",
     fullName: "FRONT OFFICE & PHARMACY STAFF",
     role: "staff",
     department: "Reception & Pharmacy",
@@ -88,24 +88,24 @@ export function buildSampleSeedCollections(todayISO) {
     settings: [
       {
         id: "hospital_config",
-        hospitalName: "Guru Hospital — Nalam+",
-        uhidPrefix: "GH",
+        hospitalName: "See Curavite Hospital Management",
+        uhidPrefix: "CVH",
         address: "42, Main Bazaar Road, Medical Enclave, Tamil Nadu - 600001",
         phone: "+91 98400 12345",
-        gstin: "33AABCG1234D1Z5",
+        gstin: "33AABCC1234D1Z5",
         drugLicenseNo: "TN-CHN-20B-2026-0091",
         lowStockThreshold: 15,
         nearExpiryDays: 90,
         autoLogoutMinutes: 15,
         strictLogoutOnHide: false,
-        receiptFooter: "Thank you for visiting Guru Hospital. Get Well Soon!",
+        receiptFooter: "Thank you for visiting See Curavite Hospital Management. Get Well Soon!",
         smsWebhookUrl: ""
       }
     ],
     patients: [
       {
         id: "PAT-1001",
-        uhid: "GH-2026-1001",
+        uhid: "CVH-2026-1001",
         fullName: "Aravind Swaminathan",
         age: 34,
         gender: "Male",
@@ -122,7 +122,7 @@ export function buildSampleSeedCollections(todayISO) {
       },
       {
         id: "PAT-1002",
-        uhid: "GH-2026-1002",
+        uhid: "CVH-2026-1002",
         fullName: "Lakshmi Narayanan",
         age: 29,
         gender: "Female",
@@ -139,7 +139,7 @@ export function buildSampleSeedCollections(todayISO) {
       },
       {
         id: "PAT-1003",
-        uhid: "GH-2026-1003",
+        uhid: "CVH-2026-1003",
         fullName: "Muthukumar Vel",
         age: 58,
         gender: "Male",
@@ -160,7 +160,7 @@ export function buildSampleSeedCollections(todayISO) {
         id: "OP-101",
         visitDate: today,
         tokenNo: "T-01",
-        uhid: "GH-2026-1001",
+        uhid: "CVH-2026-1001",
         patientName: "Aravind Swaminathan",
         doctorName: "Dr. S. Karthikeyan (MD)",
         visitType: "New",
@@ -176,7 +176,7 @@ export function buildSampleSeedCollections(todayISO) {
         id: "OP-102",
         visitDate: today,
         tokenNo: "T-02",
-        uhid: "GH-2026-1002",
+        uhid: "CVH-2026-1002",
         patientName: "Lakshmi Narayanan",
         doctorName: "Dr. R. Meenakshi (DGO)",
         visitType: "Review",
@@ -190,12 +190,12 @@ export function buildSampleSeedCollections(todayISO) {
       }
     ],
     appointments: [
-      { id: "APT-1", date: today, time: "10:30", uhid: "GH-2026-1001", patientName: "Aravind Swaminathan", doctorName: "Dr. S. Karthikeyan (MD)", phone: "9876543210", status: "Confirmed" },
-      { id: "APT-2", date: today, time: "11:15", uhid: "GH-2026-1003", patientName: "Muthukumar Vel", doctorName: "Dr. K. Ramesh (MS Ortho)", phone: "9443123456", status: "Scheduled" }
+      { id: "APT-1", date: today, time: "10:30", uhid: "CVH-2026-1001", patientName: "Aravind Swaminathan", doctorName: "Dr. S. Karthikeyan (MD)", phone: "9876543210", status: "Confirmed" },
+      { id: "APT-2", date: today, time: "11:15", uhid: "CVH-2026-1003", patientName: "Muthukumar Vel", doctorName: "Dr. K. Ramesh (MS Ortho)", phone: "9443123456", status: "Scheduled" }
     ],
     beds: [
       { id: "BED-101", ward: "General Ward", roomNo: "GW-01", category: "General", dailyRate: 1200, status: "Available", patientUhid: "", patientName: "", housekeeping: "Clean" },
-      { id: "BED-102", ward: "General Ward", roomNo: "GW-02", category: "General", dailyRate: 1200, status: "Occupied", patientUhid: "GH-2026-1003", patientName: "Muthukumar Vel", housekeeping: "Occupied" },
+      { id: "BED-102", ward: "General Ward", roomNo: "GW-02", category: "General", dailyRate: 1200, status: "Occupied", patientUhid: "CVH-2026-1003", patientName: "Muthukumar Vel", housekeeping: "Occupied" },
       { id: "BED-201", ward: "Semi-Private", roomNo: "SP-01", category: "Semi-Private", dailyRate: 2400, status: "Available", patientUhid: "", patientName: "", housekeeping: "Clean" },
       { id: "BED-202", ward: "Private AC", roomNo: "PR-01", category: "Private AC", dailyRate: 4200, status: "Available", patientUhid: "", patientName: "", housekeeping: "Clean" },
       { id: "BED-301", ward: "ICU", roomNo: "ICU-01", category: "Critical Care", dailyRate: 7500, status: "Cleaning", patientUhid: "", patientName: "", housekeeping: "Sanitizing" }
@@ -204,7 +204,7 @@ export function buildSampleSeedCollections(todayISO) {
       {
         id: "IP-2026-01",
         admitDate: today,
-        uhid: "GH-2026-1003",
+        uhid: "CVH-2026-1003",
         patientName: "Muthukumar Vel",
         doctorName: "Dr. K. Ramesh (MS Ortho)",
         ward: "General Ward",
@@ -223,7 +223,7 @@ export function buildSampleSeedCollections(todayISO) {
       {
         id: "RX-2026-01",
         rxDate: today,
-        uhid: "GH-2026-1001",
+        uhid: "CVH-2026-1001",
         patientName: "Aravind Swaminathan",
         doctorName: "Dr. S. Karthikeyan (MD)",
         items: [
@@ -263,7 +263,7 @@ export function buildSampleSeedCollections(todayISO) {
       {
         id: "PHB-2026-001",
         billDate: today,
-        uhid: "GH-2026-1002",
+        uhid: "CVH-2026-1002",
         patientName: "Lakshmi Narayanan",
         saleType: "Prescription",
         items: [{ medId: "MED-001", medName: "Paracetamol 650mg Tab (Dolo)", batchNo: "DL2609", qty: 2, mrp: 34, gstPercent: 12, amount: 68 }],
@@ -289,7 +289,7 @@ export function buildSampleSeedCollections(todayISO) {
       {
         id: "LAB-2026-01",
         orderDate: today,
-        uhid: "GH-2026-1001",
+        uhid: "CVH-2026-1001",
         patientName: "Aravind Swaminathan",
         category: "Bloodtest",
         testName: "Complete Blood Count (CBC)",
@@ -306,7 +306,7 @@ export function buildSampleSeedCollections(todayISO) {
       {
         id: "INV-2026-001",
         billDate: today,
-        uhid: "GH-2026-1001",
+        uhid: "CVH-2026-1001",
         patientName: "Aravind Swaminathan",
         doctorName: "Dr. S. Karthikeyan (MD)",
         department: "OP Consultation",
@@ -322,7 +322,7 @@ export function buildSampleSeedCollections(todayISO) {
       {
         id: "INV-2026-002",
         billDate: today,
-        uhid: "GH-2026-1001",
+        uhid: "CVH-2026-1001",
         patientName: "Aravind Swaminathan",
         doctorName: "Dr. S. Karthikeyan (MD)",
         department: "Diagnostics",
@@ -352,8 +352,8 @@ export function buildSampleSeedCollections(todayISO) {
       { id: "ST-03", name: "A4 Printing Paper Ream", category: "Stationery", unit: "Ream", stock: 22, minLevel: 5 }
     ],
     ambulances: [
-      { id: "AMB-01", regNo: "TN-01-G-1080", type: "ALS ICU Cardiac", driver: "Senthil Kumar", phone: "9840100108", status: "Available" },
-      { id: "AMB-02", regNo: "TN-01-G-1081", type: "BLS Oxygen Van", driver: "Murugan R", phone: "9840100109", status: "Available" }
+      { id: "AMB-01", regNo: "TN-01-C-1080", type: "ALS ICU Cardiac", driver: "Senthil Kumar", phone: "9840100108", status: "Available" },
+      { id: "AMB-02", regNo: "TN-01-C-1081", type: "BLS Oxygen Van", driver: "Murugan R", phone: "9840100109", status: "Available" }
     ],
     masters: [
       { id: "M-DOC-1", catalog: "Service Providers", code: "DOC01", name: "Dr. S. Karthikeyan (MD)", details: "General Medicine | Fee: ₹400 | Share: 70%" },

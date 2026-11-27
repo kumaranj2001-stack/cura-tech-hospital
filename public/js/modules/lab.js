@@ -211,7 +211,7 @@ async function renderLabAnalytics(container, viewId) {
     ],
     rows,
     exportFileName: `${viewId}.csv`,
-    printTitle: `Guru Hospital — ${viewId.replace(/_/g, " ").toUpperCase()}`
+    printTitle: `See Curavite — ${viewId.replace(/_/g, " ").toUpperCase()}`
   });
 }
 

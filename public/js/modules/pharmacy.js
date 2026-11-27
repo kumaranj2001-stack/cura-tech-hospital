@@ -777,7 +777,7 @@ async function renderPharmacyReport(container, reportName) {
     columns,
     rows,
     exportFileName: `pharmacy-${reportName.toLowerCase().replace(/\s+/g, "-")}.csv`,
-    printTitle: `Guru Hospital Pharmacy — ${reportName}`
+    printTitle: `See Curavite Pharmacy — ${reportName}`
   });
 }
 
@@ -805,7 +805,7 @@ async function renderSalesReminders(container) {
       phone: p.phone,
       channel: "WhatsApp",
       category: "Pharmacy Refill",
-      message: `Hello ${p.fullName}, your monthly prescription refill is due at Guru Hospital Pharmacy. Reply to reserve!`
+      message: `Hello ${p.fullName}, your monthly prescription refill is due at See Curavite Hospital Management Pharmacy. Reply to reserve!`
     });
     toast("Refill reminder logged!", "success");
     if (res.whatsappUrl) window.open(res.whatsappUrl, "_blank", "noopener");

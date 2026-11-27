@@ -21,7 +21,7 @@ export async function renderMasterCatalogView(catalogName, container) {
     <div class="module-header">
       <div>
         <h2>Master Catalog: ${esc(catalogName)}</h2>
-        <p>Standardized clinical &amp; operational registry used across Guru Hospital (Nalam+).</p>
+        <p>Standardized clinical &amp; operational registry used across See Curavite Hospital Management.</p>
       </div>
     </div>
     ${canEdit ? `

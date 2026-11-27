@@ -16,7 +16,7 @@ const CODE39_MAP = {
 };
 
 export function renderBarcodeSVG(value, height = 38) {
-  const safe = `*${String(value || "GH000").toUpperCase().replace(/[^0-9A-Z\-. $/+%]/g, "-")}*`;
+  const safe = `*${String(value || "CVH000").toUpperCase().replace(/[^0-9A-Z\-. $/+%]/g, "-")}*`;
   let x = 4;
   const rects = [];
   const narrow = 1.6;

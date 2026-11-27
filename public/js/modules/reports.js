@@ -208,6 +208,6 @@ export async function renderEnterpriseReport(reportName, container) {
     columns,
     rows,
     exportFileName: `${reportName.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.csv`,
-    printTitle: `Guru Hospital — ${reportName}`
+    printTitle: `See Curavite Hospital Management — ${reportName}`
   });
 }

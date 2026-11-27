@@ -1,4 +1,4 @@
--- Guru Hospital (Nalam+ ERP) — Relational Database Schema Reference
+-- See Curavite Hospital Management — Relational Database Schema Reference
 -- Compatible with PostgreSQL / Supabase if you ever migrate from Firebase Cloud Firestore.
 
 create table if not exists public.roles_users (
@@ -16,8 +16,8 @@ create table if not exists public.roles_users (
 
 create table if not exists public.hospital_settings (
   id text primary key default 'hospital_config',
-  hospital_name text not null default 'Guru Hospital — Nalam+',
-  uhid_prefix text not null default 'GH',
+  hospital_name text not null default 'See Curavite Hospital Management',
+  uhid_prefix text not null default 'CVH',
   address text,
   phone text,
   gstin text,
