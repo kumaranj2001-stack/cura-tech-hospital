@@ -1,51 +1,120 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Reject oversized or malformed writes (safely allows delete)
-    function sane() {
-      return request.method == 'delete' || (request.resource != null && request.resource.data.size() < 60);
+
+    function isSignedIn() {
+      return request.auth != null;
     }
 
-    // System metadata: readable, writable, never deletable
-    match /gp_meta/{doc} {
-      allow read: if true;
-      allow create, update: if sane();
-      allow delete: if false;
+    function currentUserDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
 
-    // Audit trail is append-only — no tampering or deletion
-    match /gp_audit/{doc} {
-      allow read: if true;
-      allow create: if sane();
+    function isActiveUser() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && currentUserDoc().active == true;
+    }
+
+    function isAdmin() {
+      return isActiveUser() && currentUserDoc().role == 'admin';
+    }
+
+    function hasPermission(perm) {
+      return isAdmin() || (
+        isActiveUser()
+        && currentUserDoc().permissions != null
+        && currentUserDoc().permissions[perm] == true
+      );
+    }
+
+    // Username -> email lookup during login (read-only for authenticated or pre-auth lookup by exact username doc id)
+    match /usernames/{username} {
+      allow get: if true;
+      allow list: if isAdmin();
+      allow write: if isAdmin() || (
+        isSignedIn()
+        && username == 'kumaran'
+        && request.auth.token.email == 'kumaran@curatech.hospital'
+      );
+    }
+
+    // User profile & RBAC permissions
+    match /users/{userId} {
+      allow get: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isAdmin() || (
+        isSignedIn()
+        && request.auth.uid == userId
+        && request.auth.token.email == 'kumaran@curatech.hospital'
+        && request.resource.data.role == 'admin'
+      );
+      allow update, delete: if isAdmin();
+    }
+
+    // System & Inventory Settings: readable by active users, writable ONLY by Admin
+    match /settings/{docId} {
+      allow read: if isActiveUser();
+      allow write: if isAdmin();
+    }
+
+    // Security Audit Logs: append by active users, readable only by Admin, immutable
+    match /audit_logs/{logId} {
+      allow read: if isAdmin() || hasPermission('view_financial_reports');
+      allow create: if isActiveUser();
       allow update, delete: if false;
     }
 
-    // Operational collections: validated reads/writes
-    match /gp_branches/{doc}      { allow read: if true; allow write: if sane(); }
-    match /gp_users/{doc}         { allow read: if true; allow write: if sane() && (request.method == 'delete' || request.resource.data.password is string); }
-    match /gp_medicines/{doc}     { allow read: if true; allow write: if sane(); }
-    match /gp_patients/{doc}      { allow read: if true; allow write: if sane(); }
-    match /gp_doctors/{doc}       { allow read: if true; allow write: if sane(); }
-    match /gp_invoices/{doc}      { allow read: if true; allow write: if sane(); }
-    match /gp_suppliers/{doc}     { allow read: if true; allow write: if sane(); }
-    match /gp_grns/{doc}          { allow read: if true; allow write: if sane(); }
-    match /gp_returns/{doc}       { allow read: if true; allow write: if sane(); }
-    match /gp_appointments/{doc}  { allow read: if true; allow write: if sane(); }
-    match /gp_admissions/{doc}    { allow read: if true; allow write: if sane(); }
-    match /gp_vitals/{doc}        { allow read: if true; allow write: if sane(); }
-    match /gp_care_plans/{doc}    { allow read: if true; allow write: if sane(); }
-    match /gp_consultations/{doc} { allow read: if true; allow write: if sane(); }
-    match /gp_lab_orders/{doc}    { allow read: if true; allow write: if sane(); }
-    match /gp_certificates/{doc}  { allow read: if true; allow write: if sane(); }
-    match /gp_equipments/{doc}    { allow read: if true; allow write: if sane(); }
-    match /gp_accounts/{doc}      { allow read: if true; allow write: if sane(); }
-    match /gp_cashier/{doc}       { allow read: if true; allow write: if sane(); }
-    match /gp_physiotherapy/{doc} { allow read: if true; allow write: if sane(); }
-    match /gp_store/{doc}         { allow read: if true; allow write: if sane(); }
-    match /gp_ambulance/{doc}     { allow read: if true; allow write: if sane(); }
-    match /gp_skin/{doc}          { allow read: if true; allow write: if sane(); }
-    match /gp_maintenance/{doc}   { allow read: if true; allow write: if sane(); }
-    match /gp_admin/{doc}         { allow read: if true; allow write: if sane(); }
-    match /gp_lab/{doc}           { allow read: if true; allow write: if sane(); }
+    // GRN / Purchase entries: staff may draft pending GRN; only Admin can approve or modify approved GRN
+    match /pharmacy_purchases/{purchaseId} {
+      allow read: if isActiveUser();
+      allow create: if isActiveUser() && (
+        isAdmin() || request.resource.data.status == 'Pending Approval'
+      );
+      allow update: if isAdmin() || (
+        hasPermission('pharmacy')
+        && resource.data.status == 'Pending Approval'
+        && request.resource.data.status == 'Pending Approval'
+      );
+      allow delete: if isAdmin();
+    }
+
+    match /store_purchases/{purchaseId} {
+      allow read: if isActiveUser();
+      allow create: if isActiveUser() && (
+        isAdmin() || request.resource.data.status == 'Pending Approval'
+      );
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Financial & Accounts collections: restricted to Admin or explicit financial permission
+    match /accounts/{docId} {
+      allow read, write: if isAdmin() || hasPermission('accounts');
+    }
+    match /cash_closes/{docId} {
+      allow read, write: if isAdmin() || hasPermission('accounts');
+    }
+    match /expenses/{docId} {
+      allow read: if isActiveUser();
+      allow create: if isActiveUser();
+      allow update, delete: if isAdmin() || hasPermission('accounts');
+    }
+    match /doctor_payouts/{docId} {
+      allow read, write: if isAdmin() || hasPermission('view_financial_reports');
+    }
+
+    // Master catalogs (Medicine, Services, Tests, Suppliers, etc.): readable by staff, editable by Admin or master permission
+    match /masters/{docId} {
+      allow read: if isActiveUser();
+      allow write: if isAdmin() || hasPermission('manage_inventory_settings');
+    }
+
+    // Clinical & Operational records (patients, visits, prescriptions, lab_orders, pharmacy_sales, bills, etc.)
+    match /{collectionName}/{docId} {
+      allow read: if isActiveUser() && !(collectionName in ['users', 'usernames', 'settings', 'audit_logs', 'accounts', 'cash_closes', 'doctor_payouts', 'masters', 'pharmacy_purchases', 'store_purchases']);
+      allow create, update: if isActiveUser() && !(collectionName in ['users', 'usernames', 'settings', 'audit_logs', 'accounts', 'cash_closes', 'doctor_payouts', 'masters', 'pharmacy_purchases', 'store_purchases']);
+      allow delete: if isAdmin();
+    }
   }
 }

@@ -1,0 +1,52 @@
+.print-root {
+  display: none;
+}
+
+@media print {
+  body > *:not(#print-root) {
+    display: none !important;
+  }
+  #print-root {
+    display: block !important;
+    background: #ffffff;
+    color: #000000;
+    font-family: "Segoe UI", Arial, sans-serif;
+    padding: 8mm;
+  }
+  .print-thermal {
+    width: 76mm;
+    margin: 0 auto;
+    font-family: "Consolas", "Courier New", monospace;
+    font-size: 11px;
+    line-height: 1.35;
+  }
+  .print-a4 {
+    width: 100%;
+    font-size: 12px;
+    line-height: 1.45;
+  }
+  .print-header {
+    text-align: center;
+    border-bottom: 1.5px solid #000;
+    padding-bottom: 6px;
+    margin-bottom: 10px;
+  }
+  .print-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 8px 0;
+  }
+  .print-table th, .print-table td {
+    border: 1px solid #333;
+    padding: 4px 6px;
+    text-align: left;
+  }
+  .print-footer {
+    margin-top: 16px;
+    border-top: 1px dashed #666;
+    padding-top: 6px;
+    font-size: 11px;
+    display: flex;
+    justify-content: space-between;
+  }
+}
