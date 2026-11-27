@@ -1,0 +1,15 @@
+# Dependency & build artifacts
+node_modules/
+.vercel/
+.firebase/
+dist/
+
+# Environment & local secrets
+.env
+.env.local
+.env.*.local
+
+# OS & editor files
+.DS_Store
+Thumbs.db
+*.log

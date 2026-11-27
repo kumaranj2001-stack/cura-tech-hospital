@@ -1,0 +1,16 @@
+{
+  "name": "Guru Hospital — Nalam+ ERP",
+  "short_name": "Guru Nalam+",
+  "description": "Guru Hospital (Nalam+) Enterprise Hospital, Lab, Pharmacy & Billing ERP",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#2b2d30",
+  "theme_color": "#1d6fe2",
+  "icons": [
+    {
+      "src": "/assets/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

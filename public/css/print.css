@@ -1,0 +1,72 @@
+/* Thermal 80mm Receipt & A4 Medical / Lab / Certificate Print Rules */
+.print-root {
+  display: none;
+}
+
+@media print {
+  body * {
+    visibility: hidden !important;
+  }
+
+  .print-root,
+  .print-root * {
+    visibility: visible !important;
+  }
+
+  .print-root {
+    display: block !important;
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    background: #ffffff;
+    color: #000000;
+    padding: 10px;
+  }
+
+  .print-thermal {
+    width: 78mm;
+    margin: 0 auto;
+    font-family: "Courier New", monospace;
+    font-size: 11px;
+    line-height: 1.35;
+  }
+
+  .print-a4 {
+    width: 100%;
+    max-width: 190mm;
+    margin: 0 auto;
+    font-family: "Segoe UI", Arial, sans-serif;
+    font-size: 12px;
+    line-height: 1.45;
+  }
+
+  .print-header {
+    text-align: center;
+    border-bottom: 1px dashed #333;
+    padding-bottom: 6px;
+    margin-bottom: 8px;
+  }
+
+  .print-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 8px 0;
+  }
+
+  .print-table th,
+  .print-table td {
+    border-bottom: 1px solid #ccc;
+    padding: 4px 3px;
+    text-align: left;
+  }
+
+  .print-footer {
+    border-top: 1px dashed #333;
+    margin-top: 10px;
+    padding-top: 6px;
+    display: flex;
+    justify-content: space-between;
+    font-size: 10.5px;
+  }
+}

@@ -1,0 +1,120 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function currentUserDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isActiveUser() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && currentUserDoc().active == true;
+    }
+
+    function isAdmin() {
+      return isActiveUser() && currentUserDoc().role == 'admin';
+    }
+
+    function hasPermission(perm) {
+      return isAdmin() || (
+        isActiveUser()
+        && currentUserDoc().permissions != null
+        && currentUserDoc().permissions[perm] == true
+      );
+    }
+
+    // Username -> email lookup during login
+    match /usernames/{username} {
+      allow get: if true;
+      allow list: if isAdmin();
+      allow write: if isAdmin() || (
+        isSignedIn()
+        && username == 'kumaran'
+        && request.auth.token.email == 'kumaran@guruhospital.in'
+      );
+    }
+
+    // User profile & RBAC permissions
+    match /users/{userId} {
+      allow get: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isAdmin() || (
+        isSignedIn()
+        && request.auth.uid == userId
+        && request.auth.token.email == 'kumaran@guruhospital.in'
+        && request.resource.data.role == 'admin'
+      );
+      allow update, delete: if isAdmin();
+    }
+
+    // System & Inventory Settings: readable by active users, writable ONLY by Admin
+    match /settings/{docId} {
+      allow read: if isActiveUser();
+      allow write: if isAdmin() || (docId == 'sequences' && isActiveUser());
+    }
+
+    // Security Audit Logs: append by active users, readable only by Admin or financial audit roles
+    match /audit_logs/{logId} {
+      allow read: if isAdmin() || hasPermission('view_financial_reports');
+      allow create: if isActiveUser();
+      allow update, delete: if false;
+    }
+
+    // GRN / Purchase entries: staff may draft Pending Approval; only Admin can approve or modify approved GRN
+    match /pharmacy_purchases/{purchaseId} {
+      allow read: if isActiveUser();
+      allow create: if isActiveUser() && (
+        isAdmin() || request.resource.data.status == 'Pending Approval'
+      );
+      allow update: if isAdmin() || (
+        hasPermission('pharmacy')
+        && resource.data.status == 'Pending Approval'
+        && request.resource.data.status == 'Pending Approval'
+      );
+      allow delete: if isAdmin();
+    }
+
+    match /store_purchases/{purchaseId} {
+      allow read: if isActiveUser();
+      allow create: if isActiveUser() && (
+        isAdmin() || request.resource.data.status == 'Pending Approval'
+      );
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Financial & Accounts collections: restricted to Admin or explicit accounts/financial permissions
+    match /accounts/{docId} {
+      allow read, write: if isAdmin() || hasPermission('accounts');
+    }
+    match /cash_closes/{docId} {
+      allow read, write: if isAdmin() || hasPermission('accounts');
+    }
+    match /expenses/{docId} {
+      allow read: if isActiveUser();
+      allow create: if isActiveUser();
+      allow update, delete: if isAdmin() || hasPermission('accounts');
+    }
+    match /doctor_payouts/{docId} {
+      allow read, write: if isAdmin() || hasPermission('view_financial_reports');
+    }
+
+    // Master catalogs (Medicine, Services, Tests, Suppliers, etc.)
+    match /masters/{docId} {
+      allow read: if isActiveUser();
+      allow write: if isAdmin() || hasPermission('manage_inventory_settings');
+    }
+
+    // Clinical & Operational records (patients, visits, prescriptions, lab_orders, pharmacy_sales, bills, etc.)
+    match /{collectionName}/{docId} {
+      allow read: if isActiveUser() && !(collectionName in ['users', 'usernames', 'settings', 'audit_logs', 'accounts', 'cash_closes', 'doctor_payouts', 'masters', 'pharmacy_purchases', 'store_purchases']);
+      allow create, update: if isActiveUser() && !(collectionName in ['users', 'usernames', 'settings', 'audit_logs', 'accounts', 'cash_closes', 'doctor_payouts', 'masters', 'pharmacy_purchases', 'store_purchases']);
+      allow delete: if isAdmin();
+    }
+  }
+}

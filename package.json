@@ -1,0 +1,12 @@
+{
+  "name": "guru-hospital-nalam-erp",
+  "version": "2.1.0",
+  "description": "Guru Hospital (Nalam+ ERP) - Complete Responsive Hospital Management, Pharmacy, Lab & Billing Web App (Vercel + Firebase Free Tier)",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "npx serve public -l 5000",
+    "dev": "npx serve public -l 5000",
+    "test": "node tests/verify-erp.mjs"
+  }
+}
