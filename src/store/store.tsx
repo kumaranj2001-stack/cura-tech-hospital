@@ -35,7 +35,8 @@ import type {
   Supplier,
   User,
 } from "./types";
-import { DEFAULT_CUSTOM_STAFF_LIMITS, DEFAULT_FEATURE_FLAGS, DEFAULT_STAFF_PLAN, isStaffPlanTier, planAllowsMultiBranch, getAuditRetentionMs } from "./types";
+import { DEFAULT_CUSTOM_STAFF_LIMITS, DEFAULT_FEATURE_FLAGS, DEFAULT_STAFF_PLAN, isOverseer, planAllowsMultiBranch, getAuditRetentionMs } from "./types";
+import type { UserRole } from "./types";
 
 const DATA_KEY = "guru_pharma_data_v3";
 const SESSION_KEY = "guru_pharma_session_v3";
@@ -405,9 +406,8 @@ function ensureDefaults(data: AppData): AppData {
     guru.role = "developer";
   }
 
-  // Migrate legacy generic 'admin' and 'staff' roles to specific hospital roles
+  // Migrate legacy generic 'staff'/'pharmacist' aliases while preserving explicit 'admin' accounts
   next.users = next.users.map((u) => {
-    if (u.role === "admin") return { ...u, role: "admin_pharmacist" };
     if (u.role === "staff" || u.role === "pharmacist") return { ...u, role: "staff_pharmacist" };
     return u;
   });
@@ -630,10 +630,10 @@ function friendlyCloudError(err: unknown): string {
   return err instanceof Error ? err.message : "Cloud connection failed.";
 }
 
-function sortByDateDesc<T extends { date?: string; createdAt?: string; timestamp?: string }>(items: T[]) {
+function sortByDateDesc<T extends { date?: string; createdAt?: string; timestamp?: string; recordedAt?: string }>(items: T[]): T[] {
   return [...items].sort((a, b) => {
-    const av = a.timestamp || a.date || a.createdAt || "";
-    const bv = b.timestamp || b.date || b.createdAt || "";
+    const av = a.timestamp || a.date || a.recordedAt || a.createdAt || "";
+    const bv = b.timestamp || b.date || b.recordedAt || b.createdAt || "";
     return bv.localeCompare(av);
   });
 }
@@ -719,7 +719,7 @@ async function syncCollection<K extends EntityKey>(collectionName: string, prevI
     }
   }
 
-  for (let i = 0; i < operations.length; i += 400) {
+    for (let i = 0; i < operations.length; i += 400) {
     const batch = writeBatch(db);
     const chunk = operations.slice(i, i + 400);
     chunk.forEach((op) => {
@@ -727,7 +727,25 @@ async function syncCollection<K extends EntityKey>(collectionName: string, prevI
       if (op.type === "set") batch.set(ref, op.data as Record<string, unknown>);
       else batch.delete(ref);
     });
-    await batch.commit();
+    try {
+      await batch.commit();
+    } catch (err) {
+      const code = (err as { code?: string })?.code;
+      if (collectionName === COLLECTIONS.admissions && code === "permission-denied") {
+        // Admissions also persist via backend /api/admissions when rules haven't been republished yet
+        for (const op of chunk) {
+          if (op.type === "set" && op.data) {
+            fetch("/api/admissions", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(op.data),
+            }).catch(() => {});
+          }
+        }
+        return;
+      }
+      throw err;
+    }
   }
 }
 
@@ -771,6 +789,7 @@ async function seedCloudIfEmpty(seed: AppData) {
   const batch = writeBatch(db);
   const data = ensureDefaults(seed);
   ENTITY_KEYS.forEach((key) => {
+    if (key === "admissions") return; // Admissions seed via backend /api/admissions so rules mismatch never blocks initial seed
     (data[key] as Array<{ id: string }>).forEach((item) => {
       batch.set(doc(db, COLLECTIONS[key], item.id), removeUndefined(item));
     });
@@ -788,6 +807,13 @@ interface StoreCtx {
   data: AppData;
   setData: (updater: (d: AppData) => AppData) => void;
   currentUser: User | null;
+  rawUser: User | null;
+  setCurrentUser: (u: User | null) => void;
+  previewRole: UserRole | null;
+  setPreviewRole: (role: UserRole | null) => void;
+  users: User[];
+  branches: Branch[];
+  patients: Patient[];
   currentBranch: Branch | null;
   viewBranchId: string | null;
   setViewBranchId: (id: string | null) => void;
@@ -816,6 +842,7 @@ interface StoreCtx {
   clearAuditLog: () => Promise<void>;
   purgeAllBusinessData: () => Promise<void>;
   createUser: (user: Omit<User, "id" | "createdAt"> & { id?: string; createdAt?: string }) => Promise<User>;
+  addUser: (user: Omit<User, "id" | "createdAt"> & { id?: string; createdAt?: string }) => Promise<User>;
   updateUser: (id: string, patch: Partial<User>) => Promise<User>;
   deleteUser: (id: string) => Promise<boolean>;
 }
@@ -824,13 +851,12 @@ const Ctx = createContext<StoreCtx | null>(null);
 
 export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [fullData, setDataRaw] = useState<AppData>(() => initialData());
-  const [currentUser, setCurrentUser] = useState<User | null>(() => {
+  const [rawUser, setRawUser] = useState<User | null>(() => {
     try {
       const raw = sessionStorage.getItem(SESSION_KEY);
       if (raw) {
         let u = JSON.parse(raw) as User;
-        if (u.role === "admin") u = { ...u, role: "admin_pharmacist" };
-        else if (u.role === "staff" || u.role === "pharmacist") u = { ...u, role: "staff_pharmacist" };
+        if (u.role === "staff" || u.role === "pharmacist") u = { ...u, role: "staff_pharmacist" };
         return u;
       }
       return null;
@@ -838,6 +864,38 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       return null;
     }
   });
+  const [previewRole, setPreviewRoleState] = useState<UserRole | null>(null);
+  const currentUser = useMemo<User | null>(() => {
+    if (!rawUser) return null;
+    if (previewRole && isOverseer(rawUser.role)) {
+      return { ...rawUser, role: previewRole };
+    }
+    return rawUser;
+  }, [rawUser, previewRole]);
+
+  const setPreviewRole = useCallback((role: UserRole | null) => {
+    setPreviewRoleState(role);
+    const base = rawUserRef.current;
+    setActiveUserRole(role && base && isOverseer(base.role) ? role : base?.role);
+  }, []);
+
+  const setCurrentUser = useCallback((u: User | null) => {
+    setRawUser(u);
+    setPreviewRoleState(null);
+    setActiveUserRole(u?.role);
+    if (u) {
+      try {
+        sessionStorage.setItem(SESSION_KEY, JSON.stringify(u));
+      } catch {}
+    } else {
+      try {
+        sessionStorage.removeItem(SESSION_KEY);
+      } catch {}
+    }
+  }, []);
+
+  const rawUserRef = useRef(rawUser);
+  rawUserRef.current = rawUser;
   const actingRoleRef = useRef(currentUser?.role);
   actingRoleRef.current = currentUser?.role;
 
@@ -924,7 +982,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     });
   }, []);
 
-  const setStaffPlan = useCallback((tier: StaffPlanTier, customLimits?: StaffPlanLimits) => {
+  const setStaffPlan = useCallback((_tier: StaffPlanTier, customLimits?: StaffPlanLimits) => {
     const role = actingRoleRef.current;
     if (role !== "developer" && role !== "superadmin") return;
     const targetTier: StaffPlanTier = 5;
@@ -1205,19 +1263,23 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const login = useCallback((username: string, password: string) => {
     const allUsers = fullDataRef.current.users;
-    const user = allUsers.find((x) => x.username === username.trim());
+    const user = allUsers.find((x) => x.username.trim().toLowerCase() === username.trim().toLowerCase());
     if (!cloudReady && allUsers.length === 0) return { ok: false, message: "Connecting to cloud data. Please wait..." };
     if (!user) return { ok: false, message: "User not found" };
     if (!user.active) return { ok: false, message: "Account is deactivated. Contact admin." };
     if (user.password !== password) return { ok: false, message: "Incorrect password" };
 
+    setActiveUserRole(user.role);
+    setPreviewRoleState(null);
     sessionStorage.setItem(SESSION_KEY, JSON.stringify(user));
-    setCurrentUser(user);
+    setRawUser(user);
 
     if (user.role !== "developer" && user.role !== "superadmin") {
       const branch = user.branchId ? fullDataRef.current.branches.find((b) => b.id === user.branchId) : undefined;
       if (!branch) {
         sessionStorage.removeItem(SESSION_KEY);
+        setActiveUserRole(null);
+        setRawUser(null);
         return { ok: false, message: "No branch is assigned to your account. Contact the Super Admin." };
       }
       setCurrentBranch(branch);
@@ -1233,7 +1295,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, [cloudReady, log]);
 
   const logout = useCallback(() => {
-    const user = currentUserRef.current;
+    const user = rawUserRef.current || currentUserRef.current;
     if (user) {
       applyUpdate((prev) => ({
         ...prev,
@@ -1248,7 +1310,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
     sessionStorage.removeItem(SESSION_KEY);
     sessionStorage.removeItem(BRANCH_SESSION_KEY);
-    setCurrentUser(null);
+    setActiveUserRole(null);
+    setPreviewRoleState(null);
+    setRawUser(null);
     setCurrentBranch(null);
     setViewBranchId(null);
   }, [applyUpdate]);
@@ -1307,7 +1371,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     };
 
     if (slicesRef.current.users) {
-      slicesRef.current.users = [newUser, ...slicesRef.current.users.filter((u) => u.id !== id)];
+      const prevUsers = slicesRef.current.users as User[];
+      slicesRef.current.users = [newUser, ...prevUsers.filter((u) => u.id !== id)];
     }
 
     setDataRaw((prev) => {
@@ -1356,7 +1421,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     };
 
     if (slicesRef.current.users) {
-      slicesRef.current.users = slicesRef.current.users.map((u) => (u.id === id ? updatedUser : u));
+      const prevUsers = slicesRef.current.users as User[];
+      slicesRef.current.users = prevUsers.map((u) => (u.id === id ? updatedUser : u));
     }
 
     setDataRaw((prev) => {
@@ -1367,8 +1433,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       return nextFull;
     });
 
-    if (currentUserRef.current?.id === id) {
-      setCurrentUser(updatedUser);
+    if (rawUserRef.current?.id === id) {
+      setRawUser(updatedUser);
       try {
         sessionStorage.setItem(SESSION_KEY, JSON.stringify(updatedUser));
       } catch {}
@@ -1408,7 +1474,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
 
     if (slicesRef.current.users) {
-      slicesRef.current.users = slicesRef.current.users.filter((u) => u.id !== id);
+      const prevUsers = slicesRef.current.users as User[];
+      slicesRef.current.users = prevUsers.filter((u) => u.id !== id);
     }
 
     setDataRaw((prev) => {
@@ -1472,6 +1539,16 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           tryCompose();
         },
         (err) => {
+          const code = (err as { code?: string })?.code;
+          if (key === "admissions" && code === "permission-denied") {
+            // Gracefully fall back to local/backend admissions when Firestore rules haven't added gp_admissions yet
+            if (!slices.admissions) {
+              slices.admissions = localSeed.admissions;
+            }
+            loaded.add(key);
+            tryCompose();
+            return;
+          }
           setCloudError(friendlyCloudError(err));
           setCloudReady(false);
         }
@@ -1548,32 +1625,56 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     };
   }, []);
 
+  // Hydrate durable backend admissions once authenticated
   useEffect(() => {
     if (!currentUser) return;
-    const latestUser = fullData.users.find((u) => u.id === currentUser.id || u.username === currentUser.username);
+    let cancelled = false;
+    fetch("/api/admissions")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((res) => {
+        if (cancelled || !res?.success || !Array.isArray(res.admissions) || res.admissions.length === 0) return;
+        setDataRaw((prev) => {
+          const next = { ...prev, admissions: res.admissions };
+          saveLocalData(next);
+          fullDataRef.current = next;
+          return next;
+        });
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [currentUser?.id, currentUser?.role]);
+
+  useEffect(() => {
+    if (!rawUser) return;
+    const latestUser = fullData.users.find((u) => u.id === rawUser.id || u.username === rawUser.username);
     if (!latestUser) return;
 
     if (!latestUser.active) {
       sessionStorage.removeItem(SESSION_KEY);
       sessionStorage.removeItem(BRANCH_SESSION_KEY);
-      setCurrentUser(null);
+      setPreviewRoleState(null);
+      setRawUser(null);
       setCurrentBranch(null);
       return;
     }
 
-    if (stableStringify(latestUser) !== stableStringify(currentUser)) {
-      setCurrentUser(latestUser);
+    if (stableStringify(latestUser) !== stableStringify(rawUser)) {
+      setRawUser(latestUser);
       sessionStorage.setItem(SESSION_KEY, JSON.stringify(latestUser));
     }
 
-    if (latestUser.role !== "developer" && latestUser.role !== "superadmin") {
-      const branch = latestUser.branchId ? fullData.branches.find((b) => b.id === latestUser.branchId) : undefined;
+    const activeUser = previewRole && isOverseer(latestUser.role) ? { ...latestUser, role: previewRole } : latestUser;
+    if (activeUser.role !== "developer" && activeUser.role !== "superadmin") {
+      const branch = activeUser.branchId
+        ? fullData.branches.find((b) => b.id === activeUser.branchId)
+        : fullData.branches[0];
       if (!branch) {
-        // Branch was removed or unassigned — force re-login
-        sessionStorage.removeItem(SESSION_KEY);
-        sessionStorage.removeItem(BRANCH_SESSION_KEY);
-        setCurrentUser(null);
-        setCurrentBranch(null);
+        if (!previewRole) {
+          sessionStorage.removeItem(SESSION_KEY);
+          sessionStorage.removeItem(BRANCH_SESSION_KEY);
+          setRawUser(null);
+          setCurrentBranch(null);
+        }
         return;
       }
       if (!currentBranch || branch.id !== currentBranch.id || branch.name !== currentBranch.name || branch.code !== currentBranch.code) {
@@ -1584,7 +1685,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       setCurrentBranch(null);
       sessionStorage.removeItem(BRANCH_SESSION_KEY);
     }
-  }, [currentUser, currentBranch, fullData.users, fullData.branches]);
+  }, [rawUser, previewRole, currentBranch, fullData.users, fullData.branches]);
 
   // One-time cleanup: remove the legacy "jk" test super-admin (requested removal).
   // Runs once per device; the resulting sync deletes the record from Firebase too.
@@ -1600,6 +1701,13 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     data,
     setData,
     currentUser,
+    rawUser,
+    setCurrentUser,
+    previewRole,
+    setPreviewRole,
+    users: data.users,
+    branches: data.branches,
+    patients: data.patients,
     currentBranch,
     viewBranchId,
     setViewBranchId: setViewBranchIdGuarded,
@@ -1628,9 +1736,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     clearAuditLog,
     purgeAllBusinessData,
     createUser,
+    addUser: createUser,
     updateUser,
     deleteUser,
-  }), [data, setData, currentUser, currentBranch, viewBranchId, setViewBranchIdGuarded, flags, setFlag, setFlagsBatch, staffPlan, setStaffPlan, customStaffPlanLimits, setCustomStaffPlanLimits, payment, branchPayments, branchProfiles, login, logout, log, cloudReady, cloudSyncing, cloudError, buildBranchBackup, restoreBranchBackup, clearAuditLog, purgeAllBusinessData, createUser, updateUser, deleteUser]);
+  }), [data, setData, currentUser, rawUser, setCurrentUser, previewRole, setPreviewRole, currentBranch, viewBranchId, setViewBranchIdGuarded, flags, setFlag, setFlagsBatch, staffPlan, setStaffPlan, customStaffPlanLimits, setCustomStaffPlanLimits, payment, branchPayments, branchProfiles, login, logout, log, cloudReady, cloudSyncing, cloudError, buildBranchBackup, restoreBranchBackup, clearAuditLog, purgeAllBusinessData, createUser, updateUser, deleteUser]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 };

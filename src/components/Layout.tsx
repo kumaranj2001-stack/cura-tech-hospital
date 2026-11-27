@@ -4,7 +4,7 @@ import { useTheme } from "../store/theme";
 import { cn } from "../utils/cn";
 import { isOverseer, planAllowsMultiBranch } from "../store/types";
 import type { ErpModuleId, UserRole, ClinicalAlert } from "../store/types";
-import { canAccessPage, canAccessModule, getRoleBadgeInfo } from "../utils/permissions";
+import { canAccessModule, getRoleBadgeInfo } from "../utils/permissions";
 import RibbonBar, { ERP_TABS_CONFIG } from "./RibbonBar";
 import realtimeSync from "../services/realtime";
 import {
@@ -12,36 +12,17 @@ import {
   X,
   Clock,
   Building,
-  User,
-  Shield,
-  ChevronDown,
   Sun,
   Moon,
   LogOut,
-  Network,
   CheckCircle,
-  AlertCircle,
   Bell,
-  Sparkles,
-  Activity,
-  Package,
-  Navigation,
-  Wrench,
-  FileText,
-  Award,
-  Receipt,
-  FlaskConical,
-  Bed,
-  Stethoscope,
-  HeartPulse,
-  Pill,
-  DollarSign,
   Search,
   Radio,
   Sliders,
   ChevronRight,
-  Eye,
-  CheckSquare,
+  RotateCcw,
+  Settings as SettingsIcon,
 } from "lucide-react";
 import logoUrl from "../assets/logo.png";
 
@@ -95,19 +76,36 @@ export interface LayoutProps {
   children: React.ReactNode;
 }
 
+const ROLE_SWITCH_OPTIONS: { r: UserRole; label: string }[] = [
+  { r: "doctor", label: "Doctor" },
+  { r: "nurse", label: "Nurse" },
+  { r: "receptionist", label: "Reception" },
+  { r: "lab_tech", label: "Lab Tech" },
+  { r: "staff_pharmacist", label: "Pharmacy" },
+  { r: "cashier", label: "Cashier" },
+  { r: "accountant", label: "Accounts" },
+  { r: "maintenance", label: "Maintenance" },
+  { r: "physiotherapy", label: "Physio" },
+  { r: "store_manager", label: "Store" },
+  { r: "ambulance", label: "Ambulance" },
+  { r: "skin_specialist", label: "Skin" },
+  { r: "admin", label: "Admin" },
+  { r: "superadmin", label: "Super Admin" },
+];
+
 export const Layout: React.FC<LayoutProps> = ({
   activeModule = "patient",
   setActiveModule,
   activeAction = "",
   onRibbonActionClick,
-  page,
   setPage,
   children,
 }) => {
   const {
     currentUser,
-    setCurrentUser,
-    users,
+    rawUser,
+    previewRole,
+    setPreviewRole,
     data,
     logout,
     viewBranchId,
@@ -129,8 +127,9 @@ export const Layout: React.FC<LayoutProps> = ({
   const [showAlertsDropdown, setShowAlertsDropdown] = useState(false);
   const alertsDropdownRef = useRef<HTMLDivElement>(null);
 
-  // Optional ribbon action bar toggle (collapsed by default for space-constrained terminals)
-  const [showToolRibbon, setShowToolRibbon] = useState(false);
+  // Ribbon visibility & collapse state (visible by default for desktop ribbon-tabbed layout; collapsible anytime)
+  const [showToolRibbon, setShowToolRibbon] = useState(true);
+  const [isRibbonCollapsed, setIsRibbonCollapsed] = useState(false);
 
   // Live Digital Clock
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -175,10 +174,12 @@ export const Layout: React.FC<LayoutProps> = ({
   const currentBranch =
     data.branches.find((b) => b.id === (viewBranchId || currentUser?.branchId)) ||
     data.branches[0] || {
-      id: "BR-01",
+      id: "br_main",
       name: "Cura Tech Central Hospital",
-      city: "Chennai",
+      address: "Main Campus",
       code: "CURA-MAIN",
+      active: true,
+      createdAt: "",
     };
 
   const handleSelectModule = (modId: ErpModuleId) => {
@@ -221,7 +222,6 @@ export const Layout: React.FC<LayoutProps> = ({
     hour12: true,
   });
 
-  // Role Workstation Title
   const getWorkstationTitle = () => {
     switch (currentUser?.role) {
       case "doctor":
@@ -254,14 +254,15 @@ export const Layout: React.FC<LayoutProps> = ({
     }
   };
 
+  const isTrueOverseer = isOverseer(rawUser?.role || currentUser?.role);
+
   return (
-    <div className="h-screen [height:100dvh] flex flex-col overflow-hidden bg-slate-50 dark:bg-slate-900 transition-colors select-none">
-      {/* ── 1. RESPONSIVE APP HEADER WITH HAMBURGER BUTTON & REAL-TIME SYNC ── */}
-      <header className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-3 lg:px-4 py-2 z-30 transition-colors shrink-0 shadow-xs">
-        <div className="flex items-center justify-between gap-2.5">
-          {/* Left: Top-Left Collapsible Hamburger Menu Button + Brand & Workstation Breadcrumb */}
-          <div className="flex items-center gap-2.5 min-w-0">
-            {/* Hamburger Button with unread alert badge indicator */}
+    <div className="min-h-screen h-[100dvh] flex flex-col overflow-hidden bg-slate-50 dark:bg-slate-900 transition-colors">
+      {/* ── 1. RESPONSIVE APP HEADER WITH TOP-LEFT HAMBURGER BUTTON ── */}
+      <header className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-2.5 sm:px-3 lg:px-4 py-2 z-30 transition-colors shrink-0 shadow-xs">
+        <div className="flex items-center justify-between gap-2">
+          {/* Left: Top-Left Collapsible Hamburger Menu Button + Brand & Workstation Pill */}
+          <div className="flex items-center gap-2 min-w-0">
             <button
               onClick={() => setIsMenuOpen((prev) => !prev)}
               className="relative p-2 rounded-xl text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition focus:outline-none focus:ring-2 focus:ring-sky-500 shrink-0"
@@ -274,46 +275,54 @@ export const Layout: React.FC<LayoutProps> = ({
               )}
             </button>
 
-            {/* Brand Logo & Name */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 min-w-0">
               <div className="w-8 h-8 shrink-0 rounded-xl bg-sky-600 text-white flex items-center justify-center font-extrabold shadow-sm overflow-hidden">
                 <img src={logoUrl} alt="Cura Tech Logo" className="w-6 h-6 object-contain" />
               </div>
               <div className="hidden sm:block leading-tight">
-                <div className="font-extrabold tracking-tight text-slate-800 dark:text-slate-100 text-sm">
+                <div className="font-extrabold tracking-tight text-slate-800 dark:text-slate-100 text-sm whitespace-nowrap">
                   CURA<span className="text-sky-600 dark:text-sky-400">TECH</span>
                   <span className="text-[10px] ml-1.5 font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-sky-100 dark:bg-sky-950 text-sky-700 dark:text-sky-300">
-                    HOSPITAL
+                    ERP
                   </span>
                 </div>
-                <div className="text-[10px] text-slate-400 font-medium">{getWorkstationTitle()}</div>
+                <div className="text-[10px] text-slate-400 font-medium truncate max-w-[200px]">{getWorkstationTitle()}</div>
               </div>
             </div>
 
-            {/* Active Workstation Role Indicator Pill */}
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-700/80 text-xs font-semibold text-slate-700 dark:text-slate-200 ml-1 truncate">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0"></span>
-              <span className="capitalize truncate max-w-[140px] sm:max-w-none">{activeModule} Workstation</span>
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-700/80 text-xs font-semibold text-slate-700 dark:text-slate-200 ml-0.5 truncate">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+              <span className="capitalize truncate max-w-[110px] sm:max-w-none">{activeModule}</span>
             </div>
 
-            {/* Optional Tool Ribbon Toggle Button (For space-constrained terminals) */}
             <button
               onClick={() => setShowToolRibbon((prev) => !prev)}
               className={cn(
-                "hidden xl:flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors",
+                "flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium border transition-colors shrink-0",
                 showToolRibbon
                   ? "bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 border-sky-300 dark:border-sky-700"
                   : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-50"
               )}
-              title="Toggle Detailed Action Tools Ribbon"
+              title="Show or Hide Ribbon Bar"
             >
               <Sliders className="w-3.5 h-3.5 text-sky-500" />
-              <span>{showToolRibbon ? "Hide Tools Ribbon" : "Action Tools"}</span>
+              <span className="hidden md:inline">{showToolRibbon ? "Hide Ribbon" : "Show Ribbon"}</span>
             </button>
           </div>
 
-          {/* Right: Real-Time Sync Indicator, Clinical Alert Bell, Branch, Theme, User */}
-          <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
+          {/* Right: Preview Exit, Real-Time Sync, Alerts Bell, Branch, Theme, User, Logout */}
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            {previewRole && isTrueOverseer && (
+              <button
+                onClick={() => setPreviewRole(null)}
+                className="flex items-center gap-1 px-2 py-1 rounded-lg bg-amber-100 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700 text-[11px] font-bold"
+                title="Exit Role Preview and return to Developer"
+              >
+                <RotateCcw className="w-3 h-3" />
+                <span className="hidden sm:inline">Exit Preview</span>
+              </button>
+            )}
+
             {/* Real-time WebSocket Connectivity Badge */}
             <div
               className={cn(
@@ -330,10 +339,10 @@ export const Layout: React.FC<LayoutProps> = ({
                   isWsConnected ? "bg-emerald-500 animate-pulse" : "bg-amber-500"
                 )}
               />
-              <span className="hidden lg:inline">{isWsConnected ? "Real-Time Sync" : "Reconnecting..."}</span>
+              <span className="hidden lg:inline">{isWsConnected ? "Real-Time Sync" : "Local Sync"}</span>
             </div>
 
-            {/* Real-Time Clinical Alert Bell with Dropdown */}
+            {/* Real-Time Clinical Alert Bell */}
             <div className="relative" ref={alertsDropdownRef}>
               <button
                 onClick={() => setShowAlertsDropdown((prev) => !prev)}
@@ -358,9 +367,8 @@ export const Layout: React.FC<LayoutProps> = ({
                 )}
               </button>
 
-              {/* Alert Dropdown Panel */}
               {showAlertsDropdown && (
-                <div className="absolute right-0 mt-2 w-80 sm:w-96 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-2xl py-2 z-50 animate-in fade-in zoom-in-95 duration-150 text-xs">
+                <div className="absolute right-0 mt-2 w-72 sm:w-96 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-2xl py-2 z-50 text-xs">
                   <div className="px-3 py-2 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center">
                     <div className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
                       <Radio className="w-3.5 h-3.5 text-rose-500" />
@@ -425,7 +433,7 @@ export const Layout: React.FC<LayoutProps> = ({
               <span className="font-bold text-slate-800 dark:text-slate-200 truncate max-w-[130px]">
                 {currentBranch.name}
               </span>
-              {multiBranch && (
+              {multiBranch && isTrueOverseer && (
                 <select
                   value={viewBranchId || "all"}
                   onChange={(e) => setViewBranchId(e.target.value === "all" ? null : e.target.value)}
@@ -480,17 +488,15 @@ export const Layout: React.FC<LayoutProps> = ({
         </div>
       </header>
 
-      {/* ── 2. COLLAPSIBLE HAMBURGER MENU DRAWER (ADAPTS TO ALL DEVICE FORM FACTORS) ── */}
+      {/* ── 2. COLLAPSIBLE HAMBURGER MENU DRAWER ── */}
       {isMenuOpen && (
         <div className="fixed inset-0 z-50 flex">
-          {/* Backdrop Overlay */}
           <div
-            className="fixed inset-0 bg-slate-900/40 dark:bg-black/60 backdrop-blur-xs transition-opacity animate-in fade-in duration-200"
+            className="fixed inset-0 bg-slate-900/40 dark:bg-black/60 backdrop-blur-xs transition-opacity"
             onClick={() => setIsMenuOpen(false)}
           />
 
-          {/* Slide-out Drawer Container */}
-          <div className="relative z-50 w-84 max-w-[85vw] h-full bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 shadow-2xl flex flex-col justify-between overflow-y-auto animate-in slide-in-from-left duration-200">
+          <div className="relative z-50 w-80 max-w-[88vw] h-full bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 shadow-2xl flex flex-col justify-between overflow-y-auto">
             <div>
               {/* Drawer Top Branding Bar */}
               <div className="p-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/50 flex items-center justify-between">
@@ -518,7 +524,7 @@ export const Layout: React.FC<LayoutProps> = ({
               <div className="p-3.5 bg-gradient-to-br from-sky-50 to-indigo-50/50 dark:from-slate-900 dark:to-slate-800/80 border-b border-slate-200 dark:border-slate-700">
                 <div className="text-[10px] font-bold uppercase tracking-wider text-sky-700 dark:text-sky-400 flex items-center gap-1.5 mb-1">
                   <Clock className="w-3.5 h-3.5 text-sky-500" />
-                  Live Hospital System Time
+                  Date Stamp & Hospital Time
                 </div>
                 <div className="text-xl font-mono font-extrabold text-slate-800 dark:text-slate-100 tracking-tight">
                   {formattedTime}
@@ -528,9 +534,8 @@ export const Layout: React.FC<LayoutProps> = ({
                 </div>
               </div>
 
-              {/* ── LOGGED-IN USER & ACTIVE BRANCH CARD INSIDE HAMBURGER MENU ── */}
+              {/* ── LOGGED-IN USER & ACTIVE BRANCH INDICATOR INSIDE HAMBURGER MENU ── */}
               <div className="p-3.5 border-b border-slate-200 dark:border-slate-700 space-y-2 text-xs">
-                {/* User Card */}
                 <div className="flex items-center gap-2.5 p-2 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800">
                   <div className="w-9 h-9 rounded-full bg-sky-600 text-white font-bold text-sm flex items-center justify-center shrink-0 shadow-xs">
                     {currentUser?.name ? currentUser.name.charAt(0).toUpperCase() : "U"}
@@ -548,21 +553,20 @@ export const Layout: React.FC<LayoutProps> = ({
                   </div>
                 </div>
 
-                {/* Active Branch Card */}
                 <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 space-y-1">
                   <div className="flex items-center justify-between text-[11px] text-slate-500 font-medium">
                     <span className="flex items-center gap-1">
-                      <Building className="w-3.5 h-3.5 text-sky-500" /> Active Facility:
+                      <Building className="w-3.5 h-3.5 text-sky-500" /> Logged-in Branch:
                     </span>
                     <span className="font-mono text-[10px] px-1.5 py-0.2 rounded bg-slate-200 dark:bg-slate-700 font-bold">
                       {currentBranch.code}
                     </span>
                   </div>
                   <div className="font-bold text-slate-800 dark:text-slate-200 text-xs">
-                    {currentBranch.name} ({currentBranch.city})
+                    {currentBranch.name}{currentBranch.address ? ` (${currentBranch.address})` : ""}
                   </div>
 
-                  {multiBranch && (
+                  {multiBranch && isTrueOverseer && (
                     <div className="pt-1.5 border-t border-slate-200/50 dark:border-slate-800">
                       <select
                         value={viewBranchId || "all"}
@@ -572,7 +576,7 @@ export const Layout: React.FC<LayoutProps> = ({
                         <option value="all">All Hospital Branches</option>
                         {data.branches.map((b) => (
                           <option key={b.id} value={b.id}>
-                            {b.name} ({b.city})
+                            {b.name} ({b.code})
                           </option>
                         ))}
                       </select>
@@ -581,7 +585,7 @@ export const Layout: React.FC<LayoutProps> = ({
                 </div>
               </div>
 
-              {/* ── SEARCH INPUT FOR SPACE-CONSTRAINED TERMINALS ── */}
+              {/* ── MODULE SEARCH ── */}
               <div className="p-3 pb-1">
                 <div className="relative">
                   <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-slate-400" />
@@ -595,13 +599,13 @@ export const Layout: React.FC<LayoutProps> = ({
                 </div>
               </div>
 
-              {/* ── DYNAMIC ROLE-BASED MODULE LIST (RBAC ENFORCED) ── */}
+              {/* ── AUTHORIZED WORKSTATIONS ── */}
               <div className="p-2">
                 <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 flex justify-between items-center">
                   <span>Authorized Workstations</span>
                   <span className="font-mono text-sky-600">{filteredNavModules.length} Active</span>
                 </div>
-                <div className="space-y-1 max-h-[35vh] overflow-y-auto px-1 pr-1.5">
+                <div className="space-y-1 max-h-[34vh] overflow-y-auto px-1 pr-1.5">
                   {filteredNavModules.map((mod) => {
                     const ModIcon = mod.icon;
                     const isSelected = activeModule === mod.id;
@@ -622,7 +626,7 @@ export const Layout: React.FC<LayoutProps> = ({
                           <span className="truncate">{mod.label} Module</span>
                         </div>
                         {isSelected ? (
-                          <span className="w-2 h-2 rounded-full bg-white animate-pulse shrink-0"></span>
+                          <span className="w-2 h-2 rounded-full bg-white animate-pulse shrink-0" />
                         ) : (
                           <ChevronRight className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                         )}
@@ -633,37 +637,38 @@ export const Layout: React.FC<LayoutProps> = ({
               </div>
             </div>
 
-            {/* Drawer Footer with Quick Role Preview & Sign Out */}
+            {/* Drawer Footer */}
             <div className="p-3 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 space-y-2">
-              {/* Quick Role Tester for Developer & Superadmin */}
-              {isOverseer(currentUser?.role) && (
+              {isTrueOverseer && (
                 <div>
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
-                    Quick Role Switcher (Admin Oversight)
+                  <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+                    <span>Quick Role Switcher</span>
+                    {previewRole && (
+                      <button
+                        onClick={() => {
+                          setPreviewRole(null);
+                          setIsMenuOpen(false);
+                        }}
+                        className="text-sky-600 hover:underline"
+                      >
+                        Reset
+                      </button>
+                    )}
                   </div>
                   <div className="grid grid-cols-2 gap-1 text-[10px]">
-                    {[
-                      { r: "doctor", label: "Doctor" },
-                      { r: "nurse", label: "Nurse" },
-                      { r: "receptionist", label: "Reception" },
-                      { r: "lab_tech", label: "Lab Tech" },
-                      { r: "staff_pharmacist", label: "Pharmacy" },
-                      { r: "cashier", label: "Cashier" },
-                      { r: "maintenance", label: "Maintenance" },
-                      { r: "admin", label: "Admin" },
-                    ].map((item) => (
+                    {ROLE_SWITCH_OPTIONS.map((item) => (
                       <button
                         key={item.r}
                         onClick={() => {
-                          const targetUser = users.find((u) => u.role === item.r);
-                          if (targetUser) {
-                            setCurrentUser(targetUser);
-                          } else if (currentUser) {
-                            setCurrentUser({ ...currentUser, role: item.r as UserRole });
-                          }
+                          setPreviewRole(item.r);
                           setIsMenuOpen(false);
                         }}
-                        className="py-1 px-1.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-medium hover:bg-sky-50 dark:hover:bg-sky-950 transition text-center truncate"
+                        className={cn(
+                          "py-1 px-1.5 rounded-lg border font-medium transition text-center truncate",
+                          currentUser?.role === item.r
+                            ? "bg-sky-600 text-white border-sky-600"
+                            : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-sky-50 dark:hover:bg-sky-950"
+                        )}
                       >
                         {item.label}
                       </button>
@@ -672,7 +677,18 @@ export const Layout: React.FC<LayoutProps> = ({
                 </div>
               )}
 
-              {/* Sign out button */}
+              {(isTrueOverseer || currentUser?.role === "admin" || currentUser?.role === "admin_pharmacist") && setPage && (
+                <button
+                  onClick={() => {
+                    setPage("settings");
+                    setIsMenuOpen(false);
+                  }}
+                  className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 transition"
+                >
+                  <SettingsIcon className="w-3.5 h-3.5 text-sky-500" /> System & Cloud Settings
+                </button>
+              )}
+
               <button
                 onClick={logout}
                 className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs font-bold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/40 transition"
@@ -684,20 +700,23 @@ export const Layout: React.FC<LayoutProps> = ({
         </div>
       )}
 
-      {/* ── 3. DETAILED ACTION TOOLS RIBBON (TOGGLEABLE OR COMPACT TO PREVENT STATIC TOP-BAR OVERFLOW) ── */}
+      {/* ── 3. RIBBON-TABBED ACTION BAR ── */}
       {showToolRibbon && (
-        <div className="border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shrink-0">
+        <div className="shrink-0">
           <RibbonBar
             activeModule={activeModule}
-            onSelectModule={handleSelectModule}
-            onActionClick={handleRibbonAction}
+            setActiveModule={handleSelectModule}
             activeAction={activeAction}
+            onActionClick={handleRibbonAction}
+            isRibbonCollapsed={isRibbonCollapsed}
+            setIsRibbonCollapsed={setIsRibbonCollapsed}
+            allowedModuleIds={authorizedModules.map((m) => m.id)}
           />
         </div>
       )}
 
-      {/* ── 4. MAIN VIEWPORT (DEDICATED ROLE WORKSTATION CONTAINER) ── */}
-      <main className="flex-1 min-h-0 p-3 lg:p-4 overflow-y-auto overflow-x-hidden">
+      {/* ── 4. MAIN VIEWPORT ── */}
+      <main className="flex-1 min-h-0 p-2.5 sm:p-3 lg:p-4 overflow-y-auto overflow-x-hidden">
         <div className="mx-auto w-full max-w-[1600px]">{children}</div>
       </main>
     </div>

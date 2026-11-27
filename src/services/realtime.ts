@@ -38,8 +38,10 @@ class RealtimeSyncService {
 
     try {
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-      const host = window.location.hostname || "localhost";
-      const wsUrl = `${protocol}//${host}:3001/ws`;
+      const isViteDev = window.location.port === "5173" || window.location.port === "4173";
+      const wsUrl = isViteDev
+        ? `${protocol}//${window.location.host}/ws`
+        : `${protocol}//${window.location.host}/ws`;
 
       this.socket = new WebSocket(wsUrl);
 

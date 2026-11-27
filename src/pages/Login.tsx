@@ -126,17 +126,17 @@ const Login: React.FC = () => {
           {/* mobile brand */}
           <div className="lg:hidden flex items-center gap-3 mb-8 rise rise-1">
             <div className="w-12 h-12 rounded-xl bg-white ring-1 ring-slate-200 dark:ring-slate-600 flex items-center justify-center overflow-hidden shadow-lg shadow-sky-200/50 dark:shadow-none">
-              <img src={logoUrl} alt="Guru logo" className="w-10 h-10 object-contain" />
+              <img src={logoUrl} alt="Cura Tech logo" className="w-10 h-10 object-contain" />
             </div>
             <div>
-              <div className="text-xl font-extrabold tracking-tight text-slate-800 dark:text-slate-100">GU<span className="text-sky-600 dark:text-sky-400">RU</span></div>
-              <div className="text-[11px] text-slate-500 dark:text-slate-400 tracking-wide">Pharmacy Management System</div>
+              <div className="text-xl font-extrabold tracking-tight text-slate-800 dark:text-slate-100">CURA<span className="text-sky-600 dark:text-sky-400">TECH</span></div>
+              <div className="text-[11px] text-slate-500 dark:text-slate-400 tracking-wide">Hospital ERP Management System</div>
             </div>
           </div>
 
           <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl shadow-slate-200/60 dark:shadow-none border border-slate-100 dark:border-slate-700 p-7 rise rise-2">
             <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100">Sign in</h2>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 mb-6">Access your pharmacy console</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 mb-6">Access your hospital ERP workstation</p>
 
             <form onSubmit={submit} className="space-y-4">
               <div>

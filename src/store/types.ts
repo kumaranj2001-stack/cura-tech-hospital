@@ -54,6 +54,7 @@ export interface Branch {
   id: string;
   name: string;
   code: string; // short code like "BR001"
+  city?: string;
   storeName?: string;   // pharmacy display name on invoices
   address?: string;     // registered address
   gstNumber?: string;   // GSTIN
@@ -69,6 +70,7 @@ export interface User {
   name: string;
   role: UserRole;
   branchId?: string; // for admin/staff - which branch they belong to
+  pin?: string;
   active: boolean;
   createdAt: string;
 }
@@ -87,6 +89,7 @@ export interface Medicine {
   gst: number;
   narcotic?: boolean;
   minStock?: number; // manual low-stock threshold (default 10)
+  createdAt?: string;
 }
 
 /* Per-medicine low-stock threshold — editable so small-pack drugs don't false-alarm */
@@ -610,7 +613,7 @@ export const planAllowsMultiBranch = (tier: StaffPlanTier, customLimits?: StaffP
 
 export const DEFAULT_STAFF_PLAN: StaffPlanTier = 5;
 
-export const staffPlanLimits = (tier: StaffPlanTier, customLimits?: StaffPlanLimits): StaffPlanLimits => {
+export const staffPlanLimits = (_tier: StaffPlanTier, customLimits?: StaffPlanLimits): StaffPlanLimits => {
   const base = customLimits ?? DEFAULT_CUSTOM_STAFF_LIMITS;
   return {
     superadmin: typeof base.superadmin === "number" ? Math.max(0, base.superadmin) : 0,

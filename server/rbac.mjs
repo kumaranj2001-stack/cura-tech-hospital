@@ -1,14 +1,7 @@
 /**
  * Role-Based Access Control (RBAC) Module for Cura-Tech Hospital Management System
- * 
- * Regulates system access and API routing based on functional hospital roles:
- * - Super Admin & Developer: Unrestricted system-wide authority (users, branches, all clinical & financial data, audit, purge)
- * - Admin & Admin Pharmacist: Operational administrative authority (users, branches, clinical, financial, inventory, doctors, suppliers)
- * - Receptionist: Front-desk operations, patient registration, demographic updates, appointment scheduling, patient invoice generation, payment processing
- * - Nurse: Care coordination, patient lists, vital signs monitoring, medication administration tracking, nursing notes
- * - Doctor: Comprehensive clinical authority, full patient medical histories, EHR consultations, e-prescriptions, diagnostic test orders
- * - Lab Technician: Diagnostics management, lab order queue, entering/authorizing diagnostic results, pathology reports, order status updates
- * - Staff Pharmacist / Pharmacist: Medication dispensing, prescription verification, stock deduction, pharmaceutical sales billing
+ *
+ * Regulates system access and API routing across all 17 functional hospital roles.
  */
 
 export const HOSPITAL_ROLES = {
@@ -72,13 +65,11 @@ export function isRoleAuthorized(role, method, pathname) {
 
   // 2. Super Admin: Unrestricted authority over all operational, clinical, user, and financial endpoints
   if (r === HOSPITAL_ROLES.SUPERADMIN) {
-    // Approved GRN update/delete is exclusively Developer, everything else is permitted
     return true;
   }
 
-  // 3. Admin & Admin Pharmacist: Administrative oversight, users, branches, patients, invoices, inventory, doctors
+  // 3. Admin & Admin Pharmacist: Administrative oversight across hospital modules
   if (r === HOSPITAL_ROLES.ADMIN || r === HOSPITAL_ROLES.ADMIN_PHARMACIST) {
-    // Block developer-only low-level system endpoints
     if (path.startsWith("/api/system/purge") || path.startsWith("/api/data/purge")) {
       return false;
     }
@@ -88,90 +79,66 @@ export function isRoleAuthorized(role, method, pathname) {
     return true;
   }
 
-  // 4. Receptionist: Front-desk, patient registration/demographics, patient invoices, payments, billing ledgers
+  // 4. Receptionist: Front-desk, patient registration/demographics, invoices, admissions, certificates, ambulance dispatch
   if (r === HOSPITAL_ROLES.RECEPTIONIST) {
-    // Patient registration & demographic updates
     if (path === "/api/patients" || path === "/api/patients/create" || path.startsWith("/api/patients/update")) {
       return m === "GET" || m === "POST" || m === "PUT";
     }
     if (path.startsWith("/api/patients/") && m !== "DELETE") {
       return true;
     }
-
-    // Inpatient admissions, bed assignment, transfers and discharge
     if (path === "/api/admissions" || path === "/api/admissions/create" || path.startsWith("/api/admissions/")) {
       return m === "GET" || m === "POST" || m === "PUT";
     }
-
-    // Invoice generation, payment processing, billing calculations
     if (path === "/api/invoices" || path === "/api/invoices/create") {
       return m === "GET" || m === "POST";
     }
     if (path === "/api/billing/calculate" || path === "/api/invoices/calculate") {
       return m === "POST";
     }
-
-    // View doctor schedules and directory
     if (path === "/api/doctors" || path === "/api/doctors/list" || path === "/api/doctors/filter") {
       return m === "GET" || m === "POST";
     }
-
-    // Audit logging for reception actions
+    if (path.startsWith("/api/certificates") || path.startsWith("/api/ambulance") || path.startsWith("/api/cashier")) {
+      return m === "GET" || m === "POST" || m === "PUT";
+    }
     if (path === "/api/audit" || path === "/api/audit/log") {
       return m === "POST";
     }
-
     return false;
   }
 
-  // 5. Nurse: Inpatient and outpatient care coordination, patient lists, vitals, nursing notes
+  // 5. Nurse: Inpatient and outpatient care coordination, vitals, nursing notes
   if (r === HOSPITAL_ROLES.NURSE) {
-    // Patient lists and details
     if (path === "/api/patients" || (path.startsWith("/api/patients/") && m === "GET")) {
       return m === "GET";
     }
-
-    // Inpatient list and bed monitoring
     if (path === "/api/admissions" || (path.startsWith("/api/admissions/") && m === "GET")) {
       return m === "GET";
     }
-
-    // Doctor directory (view attending physicians)
     if (path === "/api/doctors" || path === "/api/doctors/list" || path === "/api/doctors/filter") {
       return m === "GET" || m === "POST";
     }
-
-    // View formulary/medicines for administration reference
     if (path === "/api/inventory/medicines" || path === "/api/medicines") {
       return m === "GET";
     }
-
-    // Logging vitals & nursing actions
     if (path === "/api/audit" || path === "/api/audit/log") {
       return m === "POST";
     }
-
     return false;
   }
 
-  // 6. Doctor: Clinical authority, patient medical history, consultations, e-prescriptions, diagnostic test orders
+  // 6. Doctor: Clinical authority, medical histories, consultations, lab orders, skin clinic, certificates
   if (r === HOSPITAL_ROLES.DOCTOR) {
-    // Patient medical histories, consultations & updates
     if (path === "/api/patients" || path.startsWith("/api/patients/")) {
-      return m === "GET" || m === "PUT" || (path === "/api/patients" && m === "GET");
+      return m === "GET" || m === "PUT";
     }
-
-    // Inpatient rounds, admission orders and discharge advice
     if (path === "/api/admissions" || path.startsWith("/api/admissions/")) {
       return m === "GET" || m === "POST" || m === "PUT";
     }
-
-    // Doctor directory
     if (path === "/api/doctors" || path === "/api/doctors/list" || path === "/api/doctors/filter") {
       return m === "GET" || m === "POST";
     }
-
-    // Drug formulary review for prescription generation
     if (
       path === "/api/inventory/medicines" ||
       path === "/api/medicines" ||
@@ -180,85 +147,81 @@ export function isRoleAuthorized(role, method, pathname) {
     ) {
       return m === "GET" || m === "POST";
     }
-
-    // Audit logging for clinical notes and prescription issuance
+    if (path.startsWith("/api/lab") || path.startsWith("/api/skin") || path.startsWith("/api/certificates")) {
+      return m === "GET" || m === "POST" || m === "PUT";
+    }
     if (path === "/api/audit" || path === "/api/audit/log") {
       return m === "POST";
     }
-
     return false;
   }
 
-  // 7. Lab Technician: Diagnostics management, test queues, entering/authorizing test results, pathology reports
+  // 7. Lab Technician: Diagnostics management, test queues, reagent stock, external labs, test catalog
   if (r === HOSPITAL_ROLES.LAB_TECH) {
-    // View patient info for accessioning and report generation
     if (path === "/api/patients" || (path.startsWith("/api/patients/") && m === "GET")) {
       return m === "GET";
     }
-
-    // View ordering doctors
     if (path === "/api/doctors" || path === "/api/doctors/list") {
       return m === "GET" || m === "POST";
     }
-
-    // Audit logging for lab findings and authorizations
+    if (path.startsWith("/api/lab")) {
+      return true;
+    }
+    if (path.startsWith("/api/reports") && m === "GET") {
+      return true;
+    }
     if (path === "/api/audit" || path === "/api/audit/log") {
       return m === "POST";
     }
-
     return false;
   }
 
-  // 8. Staff Pharmacist / Pharmacist: Medication dispensing, verification, stock management, pharmaceutical billing
+  // 8. Staff Pharmacist / Pharmacist: Dispensing, stock, GRN, billing, store view
   if (r === HOSPITAL_ROLES.STAFF_PHARMACIST || r === HOSPITAL_ROLES.PHARMACIST || r === HOSPITAL_ROLES.STAFF) {
-    // Invoices and billing for pharmaceutical sales
     if (path === "/api/invoices" || path === "/api/invoices/create") {
       return m === "GET" || m === "POST";
     }
     if (path === "/api/billing/calculate" || path === "/api/invoices/calculate") {
       return m === "POST";
     }
-
-    // Medicine stock & dispensing
     if (path.startsWith("/api/inventory") || path.startsWith("/api/medicines")) {
-      // Disallow deleting medicines or altering branch-wide min stock settings (admin only)
       if (m === "DELETE" || path.includes("/min-stock") || path === "/api/inventory/settings") {
         return false;
       }
       return true;
     }
-
-    // GRN document parsing for incoming supplier stock
     if (path === "/api/parse-invoice") {
       return m === "POST";
     }
-
-    // Suppliers viewing
     if (path === "/api/suppliers") {
       return m === "GET";
     }
-
-    // Patient lookup for prescription queue verification
     if (path === "/api/patients" || (path.startsWith("/api/patients/") && m === "GET")) {
       return m === "GET";
     }
-
-    // Prescribing physician lookup
     if (path === "/api/doctors" || path === "/api/doctors/list") {
       return m === "GET" || m === "POST";
     }
-
-    // Audit logging
+    if (path.startsWith("/api/store")) {
+      return m === "GET" || m === "POST";
+    }
     if (path === "/api/audit" || path === "/api/audit/log") {
       return m === "POST";
     }
-
     return false;
   }
 
-  // 9. Hospital Cashier: Point of sale, bill settlement, pre-booking ledgers, cash close
+  // 9. Hospital Cashier: Point of sale, bill settlement, pre-booking ledgers, cash close, reports
   if (r === HOSPITAL_ROLES.CASHIER) {
-    if (path.startsWith("/api/invoices") || path.startsWith("/api/billing") || path.startsWith("/api/cash-close")) {
+    if (
+      path.startsWith("/api/cashier") ||
+      path.startsWith("/api/invoices") ||
+      path.startsWith("/api/billing") ||
+      path.startsWith("/api/cash-close")
+    ) {
+      return true;
+    }
+    if (path.startsWith("/api/accounts") && m === "GET") {
       return true;
     }
     if (path === "/api/patients" || (path.startsWith("/api/patients/") && m === "GET")) {
@@ -267,16 +230,27 @@ export function isRoleAuthorized(role, method, pathname) {
     if (path.startsWith("/api/reports")) {
       return m === "GET";
     }
+    if (path === "/api/audit" || path === "/api/audit/log") {
+      return m === "POST";
+    }
     return false;
   }
 
-  // 10. Chief Accountant: Financial audits, expense vouchers, receivables aging, cash close
+  // 10. Chief Accountant: Financial audits, expense vouchers, receivables aging, cash close, reports
   if (r === HOSPITAL_ROLES.ACCOUNTANT) {
-    if (path.startsWith("/api/accounts") || path.startsWith("/api/cash-close") || path.startsWith("/api/reports")) {
+    if (
+      path.startsWith("/api/accounts") ||
+      path.startsWith("/api/cash-close") ||
+      path.startsWith("/api/reports") ||
+      (path.startsWith("/api/cashier") && m === "GET")
+    ) {
       return true;
     }
     if (path.startsWith("/api/invoices") && m === "GET") {
       return true;
+    }
+    if (path === "/api/audit" || path === "/api/audit/log") {
+      return m === "POST";
     }
     return false;
   }
@@ -285,6 +259,9 @@ export function isRoleAuthorized(role, method, pathname) {
   if (r === HOSPITAL_ROLES.MAINTENANCE) {
     if (path.startsWith("/api/equipments") || path.startsWith("/api/maintenance") || path.startsWith("/api/facility")) {
       return true;
+    }
+    if (path === "/api/audit" || path === "/api/audit/log") {
+      return m === "POST";
     }
     return false;
   }
@@ -297,6 +274,9 @@ export function isRoleAuthorized(role, method, pathname) {
     if (path === "/api/patients" || (path.startsWith("/api/patients/") && m === "GET")) {
       return m === "GET";
     }
+    if (path === "/api/audit" || path === "/api/audit/log") {
+      return m === "POST";
+    }
     return false;
   }
 
@@ -304,6 +284,9 @@ export function isRoleAuthorized(role, method, pathname) {
   if (r === HOSPITAL_ROLES.STORE_MANAGER) {
     if (path.startsWith("/api/store") || path.startsWith("/api/inventory") || path.startsWith("/api/suppliers") || path.startsWith("/api/purchases")) {
       return true;
+    }
+    if (path === "/api/audit" || path === "/api/audit/log") {
+      return m === "POST";
     }
     return false;
   }
@@ -315,6 +298,9 @@ export function isRoleAuthorized(role, method, pathname) {
     }
     if (path === "/api/patients" || (path.startsWith("/api/patients/") && m === "GET")) {
       return m === "GET";
+    }
+    if (path === "/api/audit" || path === "/api/audit/log") {
+      return m === "POST";
     }
     return false;
   }
@@ -330,6 +316,9 @@ export function isRoleAuthorized(role, method, pathname) {
     if (path === "/api/doctors" || (path.startsWith("/api/doctors/") && m === "GET")) {
       return m === "GET";
     }
+    if (path === "/api/audit" || path === "/api/audit/log") {
+      return m === "POST";
+    }
     return false;
   }
 
@@ -338,23 +327,16 @@ export function isRoleAuthorized(role, method, pathname) {
 
 /**
  * Enforces Role-Based Access Control on incoming HTTP requests.
- * Returns true if the request is authorized to proceed; otherwise writes a 401/403 response and returns false.
- *
- * @param {import("node:http").IncomingMessage} req
- * @param {import("node:http").ServerResponse} res
- * @returns {boolean}
  */
 export function enforceRbac(req, res) {
   const host = req.headers.host || "localhost";
   const url = new URL(req.url, `http://${host}`);
   const pathname = url.pathname;
 
-  // 1. Allow public routes
   if (isPublicPath(pathname)) {
     return true;
   }
 
-  // 2. Extract active role from request headers or query parameter
   const roleHeader = req.headers["x-user-role"];
   const roleQuery = url.searchParams.get("role");
   const authHeader = req.headers["authorization"];
@@ -366,7 +348,6 @@ export function enforceRbac(req, res) {
 
   const normalized = normalizeRole(role);
 
-  // If no role provided on protected endpoint
   if (!normalized) {
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, x-user-role");
@@ -380,7 +361,6 @@ export function enforceRbac(req, res) {
     return false;
   }
 
-  // 3. Verify authorization
   const authorized = isRoleAuthorized(normalized, req.method, pathname);
   if (!authorized) {
     res.setHeader("Access-Control-Allow-Origin", "*");

@@ -1,466 +1,348 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { useStore } from "../store/store";
-import { Card, CardHeader, CardBody, Button, Input, Label, Select, Badge } from "../components/ui";
-import { fmtDate, fmtDateTime, flashToast } from "../utils/helpers";
-import {
-  BarChart2,
-  Users,
-  Bed,
-  LineChart,
-  Activity,
-  UserCheck,
-  Clipboard,
-  BarChart,
-  Globe,
-  FileText,
-  FlaskConical,
-  Calculator,
-  History,
-  Trash2,
-  Lock,
-  BookOpen,
-  Scissors,
-  Calendar,
-  CheckCircle2,
-  HeartPulse,
-  ExternalLink,
-  Award,
-  Shield,
-  Search,
-  Printer,
-  Download,
-  Filter,
-} from "lucide-react";
+import { Card, CardHeader, CardBody, Button, Badge, Input, EmptyState, Th, Td } from "../components/ui";
+import { fmtCurrency, fmtDateTime, flashToast, downloadCSV } from "../utils/helpers";
+import { erpGet, useErpRealtime } from "../utils/erpApi";
+import { BarChart2, Download, RefreshCw, Search } from "lucide-react";
 
-export const ReportsERP: React.FC<{
-  initialAction?: string;
-  dropdownOption?: string;
-}> = ({ initialAction = "visit_details", dropdownOption }) => {
+interface ReportConfig {
+  title: string;
+  subtitle: string;
+  category: "Clinical" | "Financial" | "Operational";
+}
+
+const REPORT_META: Record<string, ReportConfig> = {
+  visit_details: { title: "OPD & Appointment Visit Details", subtitle: "Patient visit tokens, physician assignment & consultation outcomes", category: "Clinical" },
+  ip_log_report: { title: "Inpatient IPD Admission Log", subtitle: "Ward/ICU census, daily bed charges & discharge status", category: "Clinical" },
+  diagnostics_chart: { title: "Diagnostics Volume & Mix Chart", subtitle: "Departmental lab test volume and revenue distribution", category: "Clinical" },
+  patient_analysis: { title: "Patient Demographic Analysis", subtitle: "Age, gender & blood-group breakdown across registered UHIDs", category: "Clinical" },
+  illness_report: { title: "Chief Complaint & Illness Trends", subtitle: "Most frequent symptomatic presentations", category: "Clinical" },
+  patient_by_illness: { title: "Patients Grouped by Diagnosis", subtitle: "Active clinical cohorts indexed by condition", category: "Clinical" },
+  diagnosis_report: { title: "Physician Diagnosis Register", subtitle: "Signed consultation diagnoses and treatment summary", category: "Clinical" },
+  patient_statistics: { title: "Hospital Patient Statistics", subtitle: "OPD vs IPD, active wards & diagnostic utilization metrics", category: "Clinical" },
+  icd_report: { title: "ICD-10 & Clinical Coding Register", subtitle: "Structured morbidity & diagnostic classification entries", category: "Clinical" },
+  eod_report_central: { title: "Central Hospital EOD Revenue Report", subtitle: "Merged Cashier counter receipts & Pharmacy POS invoices", category: "Financial" },
+  lab_eod_central: { title: "Central Laboratory EOD Report", subtitle: "Diagnostic billing & verification counts across branches", category: "Financial" },
+  tds_report: { title: "Section 194J TDS Deduction Report", subtitle: "Tax deducted at source on consultant payouts", category: "Financial" },
+  patient_pay_history: { title: "Patient Payment History Ledger", subtitle: "All hospital receipts and pharmacy invoices per patient", category: "Financial" },
+  deleted_charges: { title: "Cancelled Bills, Returns & Voided Charges", subtitle: "Audit register of cancelled invoices, lab orders & returns", category: "Financial" },
+  cash_close_central: { title: "Central Cash Close Variance Report", subtitle: "Counter closing totals & physical cash variance history", category: "Financial" },
+  patient_register_rep: { title: "Master Patient Registry (UHID)", subtitle: "Complete demographic register of hospital patients", category: "Operational" },
+  surgery_report: { title: "OT Surgery & Procedure Log", subtitle: "Scheduled surgical cases and surgeon allocations", category: "Operational" },
+  prebooking_rep: { title: "Surgical PreBooking Register", subtitle: "Advance surgical deposits and scheduled OT calendar", category: "Operational" },
+  review_appt_report: { title: "Review & Follow-Up Appointment Report", subtitle: "Booked vs completed review visits", category: "Operational" },
+  iud_report: { title: "Clinical Intervention & Special Ward Report", subtitle: "Inpatient special procedures and clinical intervention audit", category: "Operational" },
+  ext_lab_central: { title: "External Reference Lab Dispatch Report", subtitle: "Outsourced samples tracked by partner laboratory", category: "Operational" },
+  ce_reports: { title: "Clinical Excellence (CE) & Quality Indicators", subtitle: "Accreditation quality audits, infection control & peer reviews", category: "Operational" },
+  audit_report: { title: "System & Clinical Audit Trail", subtitle: "Immutable timestamped action history across all ERP modules", category: "Operational" },
+};
+
+export const ReportsERP: React.FC<{ initialAction?: string; dropdownOption?: string }> = ({
+  initialAction = "visit_details",
+  dropdownOption,
+}) => {
   const { data } = useStore();
-  const [activeReport, setActiveReport] = useState<string>(initialAction);
+  const [activeReport, setActiveReport] = useState(initialAction);
   const [searchQuery, setSearchQuery] = useState("");
-  const [dateRange, setDateRange] = useState("all");
+  const [loading, setLoading] = useState(false);
 
-  const patients = data.patients || [];
-  const appointments = data.appointments || [];
-  const admissions = data.admissions || [];
-  const labOrders = data.labOrders || [];
-  const invoices = data.invoices || [];
+  const [reportBundle, setReportBundle] = useState<{
+    cashCloseLogs: any[];
+    preBookings: any[];
+    receipts: any[];
+    externalDispatches: any[];
+    doctorIncomes: any[];
+    expenses: any[];
+  }>({ cashCloseLogs: [], preBookings: [], receipts: [], externalDispatches: [], doctorIncomes: [], expenses: [] });
 
-  // Diagnoses statistics (mock clinical dataset for analytics)
-  const topDiagnoses = [
-    { code: "J20.9", name: "Acute Bronchitis", count: 48, dept: "General Medicine", percentage: "18%" },
-    { code: "I10", name: "Essential Hypertension", count: 39, dept: "Cardiology", percentage: "15%" },
-    { code: "E11.9", name: "Type 2 Diabetes Mellitus", count: 35, dept: "Endocrinology", percentage: "13%" },
-    { code: "K21.9", name: "Gastro-Esophageal Reflux (GERD)", count: 28, dept: "Gastroenterology", percentage: "11%" },
-    { code: "M54.5", name: "Low Back Pain (Lumbar Spondylosis)", count: 22, dept: "Orthopedics", percentage: "8%" },
-    { code: "J06.9", name: "Acute Upper Respiratory Infection", count: 20, dept: "Pediatrics", percentage: "7%" },
-  ];
+  useEffect(() => {
+    if (initialAction) setActiveReport(initialAction);
+  }, [initialAction, dropdownOption]);
 
-  // Surgery Register Dataset
-  const surgeries = [
-    { id: "srg_1", date: "2026-11-20", patientName: "Ramesh Babu", uhid: "CURA-2026-081", surgery: "Laparoscopic Appendectomy", surgeon: "Dr. Kumaran", anesthesia: "General", outcome: "Successful" },
-    { id: "srg_2", date: "2026-11-21", patientName: "Lakshmi Priya", uhid: "CURA-2026-102", surgery: "Cesarean Section (LSCS)", surgeon: "Dr. V. Lakshmi", anesthesia: "Spinal", outcome: "Successful" },
-    { id: "srg_3", date: "2026-11-22", patientName: "Dinesh K", uhid: "CURA-2026-114", surgery: "Internal Fixation of Femur Fracture", surgeon: "Dr. Sneha Ortho", anesthesia: "Epidural", outcome: "Stable Recovery" },
-  ];
+  const loadReports = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await erpGet("/api/reports");
+      setReportBundle({
+        cashCloseLogs: res.cashCloseLogs || [],
+        preBookings: res.preBookings || [],
+        receipts: res.receipts || [],
+        externalDispatches: res.externalDispatches || [],
+        doctorIncomes: res.doctorIncomes || [],
+        expenses: res.expenses || [],
+      });
+    } catch (err: any) {
+      flashToast(err?.message || "Failed loading reports", "warn");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-  // IUD & Reproductive Health Dataset
-  const iudRecords = [
-    { id: "iud_1", date: "2026-11-18", patientName: "Meera Shankar", uhid: "CURA-2026-054", deviceType: "Copper-T 380A", doctor: "Dr. V. Lakshmi", followUp: "2026-12-18", remarks: "Procedure Uneventful" },
-    { id: "iud_2", date: "2026-11-21", patientName: "Geetha Mohan", uhid: "CURA-2026-088", deviceType: "Mirena (Levonorgestrel)", doctor: "Dr. V. Lakshmi", followUp: "2026-12-21", remarks: "Good Tolerance" },
-  ];
+  useEffect(() => {
+    loadReports();
+  }, [loadReports]);
 
-  // Hospital KPI computations
-  const totalVisits = appointments.length;
-  const totalAdmissions = admissions.length;
-  const totalRevenue = invoices.reduce((sum, inv) => sum + (inv.total || 0), 0);
-  const totalTests = labOrders.length;
+  useErpRealtime("accounts", loadReports);
+  useErpRealtime("cashier", loadReports);
+  useErpRealtime("lab", loadReports);
+
+  // Unified dataset generator per report key so every single ribbon item has structured columns + CSV export
+  const dataset = useMemo<{ columns: string[]; rows: Record<string, any>[] }>(() => {
+    const patients = data.patients || [];
+    const appointments = data.appointments || [];
+    const admissions = data.admissions || [];
+    const consultations = data.consultations || [];
+    const labOrders = data.labOrders || [];
+    const invoices = data.invoices || [];
+    const audit = data.audit || [];
+    const returns = data.returns || [];
+
+    switch (activeReport) {
+      case "ip_log_report":
+      case "iud_report":
+        return {
+          columns: ["Admission #", "Patient", "Ward / Bed", "Doctor", "Department", "Diagnosis", "Status"],
+          rows: admissions.map((a) => ({
+            "Admission #": a.admissionNumber,
+            Patient: a.patientName,
+            "Ward / Bed": `${a.ward} (${a.bedNumber})`,
+            Doctor: a.doctorName,
+            Department: a.department,
+            Diagnosis: a.provisionalDiagnosis || a.admissionReason,
+            Status: a.status,
+          })),
+        };
+      case "diagnostics_chart":
+      case "lab_eod_central":
+        return {
+          columns: ["Order #", "Patient", "Test Name", "Category", "Status", "Fee"],
+          rows: labOrders.map((o) => ({
+            "Order #": o.orderNumber,
+            Patient: o.patientName,
+            "Test Name": o.testName,
+            Category: o.category,
+            Status: o.status,
+            Fee: fmtCurrency(o.price),
+          })),
+        };
+      case "patient_analysis":
+      case "patient_register_rep":
+      case "patient_statistics":
+        return {
+          columns: ["UHID", "Patient Name", "Age / Gender", "Phone", "Blood Group", "Created"],
+          rows: patients.map((p) => ({
+            UHID: p.uhid || p.id,
+            "Patient Name": p.name,
+            "Age / Gender": `${p.age || "-"} / ${p.gender || "-"}`,
+            Phone: p.phone || "-",
+            "Blood Group": p.bloodGroup || "-",
+            Created: fmtDateTime(p.createdAt),
+          })),
+        };
+      case "illness_report":
+      case "patient_by_illness":
+      case "diagnosis_report":
+      case "icd_report":
+        return {
+          columns: ["Date", "Patient", "Doctor", "Chief Complaints", "Diagnosis", "Status"],
+          rows: consultations.map((c) => ({
+            Date: c.date,
+            Patient: c.patientName,
+            Doctor: c.doctorName,
+            "Chief Complaints": c.chiefComplaints || "-",
+            Diagnosis: c.diagnosis || "Under Evaluation",
+            Status: c.status,
+          })),
+        };
+      case "tds_report":
+        return {
+          columns: ["Doctor", "Department", "Month", "Gross Payable", "TDS (10%)", "Net Paid"],
+          rows: reportBundle.doctorIncomes.map((d) => ({
+            Doctor: d.doctorName,
+            Department: d.department,
+            Month: d.month,
+            "Gross Payable": fmtCurrency(d.grossPayable),
+            "TDS (10%)": fmtCurrency(d.tdsDeduction),
+            "Net Paid": fmtCurrency(d.netPaid),
+          })),
+        };
+      case "cash_close_central":
+        return {
+          columns: ["Date", "Cashier", "Shift", "Total Collected", "Handover", "Variance", "Status"],
+          rows: reportBundle.cashCloseLogs.map((c) => ({
+            Date: c.date,
+            Cashier: c.cashierName,
+            Shift: c.shift,
+            "Total Collected": fmtCurrency(c.totalCollected),
+            Handover: fmtCurrency(c.cashHandover),
+            Variance: fmtCurrency(c.variance),
+            Status: c.status,
+          })),
+        };
+      case "surgery_report":
+      case "prebooking_rep":
+        return {
+          columns: ["Booking #", "Patient", "Procedure", "Surgeon", "Surgery Date", "Advance Paid", "Status"],
+          rows: reportBundle.preBookings.map((pb) => ({
+            "Booking #": pb.bookingNo,
+            Patient: pb.patientName,
+            Procedure: pb.procedure,
+            Surgeon: pb.surgeon,
+            "Surgery Date": pb.surgeryDate,
+            "Advance Paid": fmtCurrency(pb.advancePaid),
+            Status: pb.status,
+          })),
+        };
+      case "ext_lab_central":
+        return {
+          columns: ["Sample ID", "Patient", "Test", "Partner Lab", "Dispatched", "Status", "Cost"],
+          rows: reportBundle.externalDispatches.map((d) => ({
+            "Sample ID": d.sampleId,
+            Patient: d.patientName,
+            Test: d.testName,
+            "Partner Lab": d.partnerLab,
+            Dispatched: d.dispatchedAt,
+            Status: d.status,
+            Cost: fmtCurrency(d.cost),
+          })),
+        };
+      case "deleted_charges":
+        return {
+          columns: ["Source", "Ref #", "Patient", "Details", "Amount", "Timestamp"],
+          rows: [
+            ...invoices.filter((i) => i.status === "cancelled").map((i) => ({ Source: "Void Invoice", "Ref #": i.number, Patient: i.patientName, Details: i.cancelReason || "Cancelled", Amount: fmtCurrency(i.total), Timestamp: fmtDateTime(i.date) })),
+            ...labOrders.filter((o) => o.status === "cancelled").map((o) => ({ Source: "Cancelled Lab", "Ref #": o.orderNumber, Patient: o.patientName, Details: o.testName, Amount: fmtCurrency(o.price), Timestamp: fmtDateTime(o.createdAt) })),
+            ...returns.map((r) => ({ Source: "Sales Return", "Ref #": r.invoiceNumber || r.id, Patient: r.patientName, Details: `${r.items?.length || 0} returned items`, Amount: fmtCurrency(r.refundTotal), Timestamp: fmtDateTime(r.date) })),
+          ],
+        };
+      case "eod_report_central":
+      case "patient_pay_history":
+        return {
+          columns: ["Ref #", "Patient", "Department / Source", "Payment Mode", "Date", "Amount"],
+          rows: [
+            ...reportBundle.receipts.map((r) => ({ "Ref #": r.receiptNumber, Patient: r.patientName, "Department / Source": r.department, "Payment Mode": r.paymentMode, Date: fmtDateTime(r.date), Amount: fmtCurrency(r.amount) })),
+            ...invoices.map((inv) => ({ "Ref #": inv.number, Patient: inv.patientName, "Department / Source": "Pharmacy Sales", "Payment Mode": inv.paymentMethod, Date: fmtDateTime(inv.date), Amount: fmtCurrency(inv.total) })),
+          ],
+        };
+      case "audit_report":
+      case "ce_reports":
+        return {
+          columns: ["User", "Action", "Details", "Timestamp"],
+          rows: audit.slice(0, 100).map((a) => ({
+            User: a.user,
+            Action: a.action,
+            Details: a.details,
+            Timestamp: fmtDateTime(a.timestamp),
+          })),
+        };
+      case "visit_details":
+      case "review_appt_report":
+      default:
+        return {
+          columns: ["Token #", "Patient", "Doctor", "Date", "Slot", "Status"],
+          rows: appointments.map((ap) => ({
+            "Token #": ap.tokenNumber || "-",
+            Patient: ap.patientName,
+            Doctor: ap.doctorName,
+            Date: ap.date,
+            Slot: ap.timeSlot || "-",
+            Status: ap.status,
+          })),
+        };
+    }
+  }, [activeReport, data, reportBundle]);
+
+  const filteredRows = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return dataset.rows;
+    return dataset.rows.filter((row) => Object.values(row).join(" ").toLowerCase().includes(q));
+  }, [dataset.rows, searchQuery]);
+
+  const meta = REPORT_META[activeReport] || REPORT_META.visit_details;
 
   return (
-    <div className="space-y-6">
-      {/* Banner */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-gradient-to-r from-slate-900 via-indigo-900 to-sky-900 text-white p-6 rounded-2xl shadow-lg border border-indigo-500/20">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <span className="bg-indigo-500/30 text-indigo-200 text-xs font-semibold px-2.5 py-0.5 rounded-full border border-indigo-400/40">
-              Central Hospital Analytics
-            </span>
-            <span className="text-xs text-sky-200">23 Statutory & Executive Reports</span>
+    <div className="space-y-5">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <BarChart2 className="w-5 h-5 text-blue-600" />
+            <h1 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white">{meta.title}</h1>
+            <Badge tone="blue">{meta.category}</Badge>
+            {dropdownOption && <Badge tone="amber">{dropdownOption}</Badge>}
+            {loading && <Badge tone="slate">Refreshing...</Badge>}
           </div>
-          <h1 className="text-2xl font-bold tracking-tight">Hospital-Wide Reports & Medical Records</h1>
-          <p className="text-slate-200 text-sm max-w-xl">
-            Central repository of clinical morbidity, bed censuses, operating theatre surgical registers, diagnostic trends, ICD-10 epidemiology, and financial reconciliation logs.
-          </p>
+          <p className="text-xs text-slate-500 mt-0.5">{meta.subtitle}</p>
         </div>
-
-        <div className="flex items-center gap-2.5 flex-wrap">
-          <Button
-            variant="secondary"
-            className="bg-white/10 hover:bg-white/20 text-white border-white/20 text-xs"
-            onClick={() => window.print()}
-          >
-            <Printer className="w-3.5 h-3.5 mr-1" />
-            Print Report
-          </Button>
-          <Button
-            className="bg-sky-500 hover:bg-sky-600 text-white text-xs font-semibold shadow-md"
-            onClick={() => flashToast("Report exported to CSV format!")}
-          >
-            <Download className="w-3.5 h-3.5 mr-1" />
-            Export CSV
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="secondary" size="sm" onClick={loadReports}><RefreshCw className="w-4 h-4" /> Sync All</Button>
+          <Button variant="primary" size="sm" onClick={() => downloadCSV(`curatech_${activeReport}.csv`, filteredRows)}>
+            <Download className="w-4 h-4" /> Export CSV ({filteredRows.length})
           </Button>
         </div>
       </div>
 
-      {/* Reports Quick Selector Ribbon Bar */}
-      <div className="bg-slate-100 dark:bg-slate-800 p-2 rounded-xl text-xs space-y-2">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 font-medium">
-            <span className="text-slate-400 font-mono uppercase">ACTIVE REPORT:</span>
-            <span className="bg-white dark:bg-slate-700 text-sky-600 dark:text-sky-300 px-2.5 py-1 rounded-md font-bold shadow-xs">
-              {activeReport.replace(/_/g, " ").toUpperCase()}
-            </span>
-            {dropdownOption && (
-              <span className="bg-sky-50 text-sky-800 dark:bg-sky-950 dark:text-sky-300 px-2 py-0.5 rounded border border-sky-200 dark:border-sky-800 font-mono">
-                Category: {dropdownOption}
-              </span>
-            )}
-          </div>
-
-          <div className="w-56">
-            <Input
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search reports data..."
-              className="text-xs py-1 h-7"
-            />
-          </div>
-        </div>
-
-        {/* Horizontal Category Badges */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-[11px]">
-          {[
-            { id: "visit_details", label: "Visit Details", icon: Users },
-            { id: "ip_log_report", label: "IP Log Report", icon: Bed },
-            { id: "diagnostics_chart", label: "Diagnostics Chart", icon: BarChart2 },
-            { id: "patient_analysis", label: "Patient Analysis", icon: LineChart },
-            { id: "eod_report_central", label: "EOD Report", icon: FileText },
-            { id: "lab_eod_central", label: "Lab EOD", icon: FlaskConical },
-            { id: "tds_report", label: "TDS Report", icon: Calculator },
-            { id: "patient_register_rep", label: "Patient Register", icon: BookOpen },
-            { id: "surgery_report", label: "Surgery Report", icon: Scissors },
-            { id: "prebooking_rep", label: "PreBooking Report", icon: Calendar },
-            { id: "iud_report", label: "IUD Report", icon: HeartPulse },
-            { id: "illness_report", label: "Illness Report", icon: Activity },
-            { id: "diagnosis_report", label: "Diagnosis (ICD-10)", icon: Globe },
-            { id: "ce_reports", label: "CE Quality Audit", icon: Award },
-            { id: "audit_report", label: "Audit Trail", icon: Shield },
-          ].map((rep) => (
-            <button
-              key={rep.id}
-              onClick={() => setActiveReport(rep.id)}
-              className={`px-2.5 py-1 rounded-lg font-medium whitespace-nowrap transition flex items-center gap-1 ${
-                activeReport === rep.id
-                  ? "bg-sky-600 text-white shadow-xs"
-                  : "bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:text-sky-600"
-              }`}
-            >
-              <rep.icon className="w-3 h-3" />
-              <span>{rep.label}</span>
-            </button>
-          ))}
-        </div>
+      {/* KPI Overview */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <Card className="p-4 border-l-4 border-l-blue-500">
+          <div className="text-xs font-semibold text-slate-500 uppercase">Patients Registered</div>
+          <div className="text-2xl font-bold text-slate-900 dark:text-white mt-1">{data.patients?.length || 0}</div>
+        </Card>
+        <Card className="p-4 border-l-4 border-l-emerald-500">
+          <div className="text-xs font-semibold text-slate-500 uppercase">OPD Visits</div>
+          <div className="text-2xl font-bold text-emerald-600 mt-1">{data.appointments?.length || 0}</div>
+        </Card>
+        <Card className="p-4 border-l-4 border-l-cyan-500">
+          <div className="text-xs font-semibold text-slate-500 uppercase">Lab Orders</div>
+          <div className="text-2xl font-bold text-cyan-600 mt-1">{data.labOrders?.length || 0}</div>
+        </Card>
+        <Card className="p-4 border-l-4 border-l-indigo-500">
+          <div className="text-xs font-semibold text-slate-500 uppercase">Filtered Report Rows</div>
+          <div className="text-2xl font-bold text-indigo-600 mt-1">{filteredRows.length}</div>
+        </Card>
       </div>
 
-      {/* KPI Overview Metrics */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <div className="p-4 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm">
-          <div className="text-xs text-slate-400 font-semibold uppercase">Total Outpatient Visits</div>
-          <div className="text-2xl font-bold text-slate-800 dark:text-slate-100 mt-2">{totalVisits}</div>
-          <span className="text-xs text-slate-500">Cumulative OPD Volume</span>
-        </div>
-        <div className="p-4 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm">
-          <div className="text-xs text-slate-400 font-semibold uppercase">Inpatient Admissions</div>
-          <div className="text-2xl font-bold text-indigo-600 dark:text-indigo-400 mt-2">{totalAdmissions}</div>
-          <span className="text-xs text-slate-500">IPD Census Episodes</span>
-        </div>
-        <div className="p-4 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm">
-          <div className="text-xs text-slate-400 font-semibold uppercase">Diagnostic Orders</div>
-          <div className="text-2xl font-bold text-teal-600 dark:text-teal-400 mt-2">{totalTests}</div>
-          <span className="text-xs text-slate-500">Lab & Pathology Tests</span>
-        </div>
-        <div className="p-4 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm">
-          <div className="text-xs text-slate-400 font-semibold uppercase">Gross Hospital Billing</div>
-          <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 mt-2 font-mono">
-            ₹{totalRevenue.toLocaleString()}
-          </div>
-          <span className="text-xs text-slate-500">Consolidated Receipts</span>
-        </div>
-      </div>
-
-      {/* ── REPORT VIEW: Visit Details / Patient Register ── */}
-      {(activeReport === "visit_details" || activeReport === "patient_register_rep" || activeReport === "review_appt_report") && (
-        <Card>
-          <CardHeader>
-            <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-              <Users className="w-4 h-4 text-sky-600" />
-              Patient Visit Details & Attendance Register
-            </h2>
-            <p className="text-xs text-slate-500">Chronological outpatient appointments and check-in timeline.</p>
-          </CardHeader>
-          <CardBody className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="border-b border-slate-200 dark:border-slate-700 bg-slate-50/75 dark:bg-slate-800/50 text-[11px] uppercase tracking-wider text-slate-500">
-                    <th className="py-3 px-4">Token #</th>
-                    <th className="py-3 px-4">Patient / UHID</th>
-                    <th className="py-3 px-4">Physician & Dept</th>
-                    <th className="py-3 px-4">Slot</th>
-                    <th className="py-3 px-4">Priority</th>
-                    <th className="py-3 px-4">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-700/60">
-                  {appointments.map((apt) => (
-                    <tr key={apt.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-700/30 transition-colors">
-                      <td className="py-3 px-4 font-mono font-bold text-sky-600 dark:text-sky-400">T-{apt.tokenNumber}</td>
-                      <td className="py-3 px-4">
-                        <div className="font-semibold text-slate-800 dark:text-slate-100">{apt.patientName}</div>
-                        <div className="text-[11px] font-mono text-slate-400">{apt.patientUhid || "NO-UHID"}</div>
-                      </td>
-                      <td className="py-3 px-4">
-                        <div className="font-medium text-slate-700 dark:text-slate-200">{apt.doctorName}</div>
-                        <div className="text-[11px] text-slate-400">{apt.department}</div>
-                      </td>
-                      <td className="py-3 px-4 font-mono">{apt.timeSlot}</td>
-                      <td className="py-3 px-4 uppercase font-semibold text-[10px] text-slate-500">{apt.priority}</td>
-                      <td className="py-3 px-4">
-                        <Badge tone={apt.status === "completed" ? "green" : "blue"}>{apt.status.replace("_", " ")}</Badge>
-                      </td>
-                    </tr>
+      {/* Report Table */}
+      <Card>
+        <CardHeader
+          title={`${meta.title} (${filteredRows.length} records)`}
+          right={
+            <div className="relative w-56 sm:w-72">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+              <Input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Filter rows..."
+                className="pl-9"
+              />
+            </div>
+          }
+        />
+        <CardBody className="p-0 overflow-x-auto">
+          {filteredRows.length === 0 ? (
+            <EmptyState icon="📊" title="No records match this report filter" sub="Records will appear automatically as transactions happen across departments." />
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr>
+                  {dataset.columns.map((col) => (
+                    <Th key={col}>{col}</Th>
                   ))}
-                </tbody>
-              </table>
-            </div>
-          </CardBody>
-        </Card>
-      )}
-
-      {/* ── REPORT VIEW: Inpatient (IP) Log Report ── */}
-      {activeReport === "ip_log_report" && (
-        <Card>
-          <CardHeader>
-            <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-              <Bed className="w-4 h-4 text-indigo-600" />
-              Inpatient (IP) Ward Admission & Census Log
-            </h2>
-            <p className="text-xs text-slate-500">Inpatient bed allocations, length of stay, and attending physicians.</p>
-          </CardHeader>
-          <CardBody className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="border-b border-slate-200 dark:border-slate-700 bg-slate-50/75 dark:bg-slate-800/50 text-[11px] uppercase tracking-wider text-slate-500">
-                    <th className="py-3 px-4">Admission #</th>
-                    <th className="py-3 px-4">Patient / UHID</th>
-                    <th className="py-3 px-4">Ward & Bed</th>
-                    <th className="py-3 px-4">Admitted Date</th>
-                    <th className="py-3 px-4">Attending Doctor</th>
-                    <th className="py-3 px-4">Provisional Diagnosis</th>
-                    <th className="py-3 px-4">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredRows.map((row, idx) => (
+                  <tr key={idx} className="border-t border-slate-100 dark:border-slate-800 hover:bg-slate-50/70 dark:hover:bg-slate-800/40">
+                    {dataset.columns.map((col) => (
+                      <Td key={col}>{row[col] ?? "—"}</Td>
+                    ))}
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-700/60">
-                  {admissions.map((adm) => (
-                    <tr key={adm.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-700/30 transition-colors">
-                      <td className="py-3 px-4 font-mono font-bold text-indigo-600 dark:text-indigo-400">{adm.admissionNumber}</td>
-                      <td className="py-3 px-4 font-semibold text-slate-800 dark:text-slate-100">{adm.patientName}</td>
-                      <td className="py-3 px-4">
-                        <span className="font-semibold text-slate-700 dark:text-slate-200">{adm.ward}</span>
-                        <div className="text-[11px] font-mono text-slate-400">Bed {adm.bedNumber}</div>
-                      </td>
-                      <td className="py-3 px-4 font-mono text-slate-500">{fmtDate(adm.admittedAt)}</td>
-                      <td className="py-3 px-4 text-slate-700 dark:text-slate-200">{adm.doctorName}</td>
-                      <td className="py-3 px-4 max-w-xs truncate text-slate-600 dark:text-slate-300">
-                        {adm.provisionalDiagnosis || adm.admissionReason}
-                      </td>
-                      <td className="py-3 px-4">
-                        <Badge tone={adm.status === "admitted" ? "green" : "slate"}>{adm.status.toUpperCase()}</Badge>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </CardBody>
-        </Card>
-      )}
-
-      {/* ── REPORT VIEW: Surgery Report ── */}
-      {activeReport === "surgery_report" && (
-        <Card>
-          <CardHeader>
-            <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-              <Scissors className="w-4 h-4 text-rose-500" />
-              Operating Theatre (OT) Surgical Procedure Log
-            </h2>
-            <p className="text-xs text-slate-500">Major and minor surgical interventions, operating surgeons, and anesthesia types.</p>
-          </CardHeader>
-          <CardBody className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="border-b border-slate-200 dark:border-slate-700 bg-slate-50/75 dark:bg-slate-800/50 text-[11px] uppercase tracking-wider text-slate-500">
-                    <th className="py-3 px-4">Date</th>
-                    <th className="py-3 px-4">Patient Name & UHID</th>
-                    <th className="py-3 px-4">Surgical Procedure</th>
-                    <th className="py-3 px-4">Chief Surgeon</th>
-                    <th className="py-3 px-4">Anesthesia</th>
-                    <th className="py-3 px-4">Outcome</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-700/60">
-                  {surgeries.map((s) => (
-                    <tr key={s.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-700/30 transition-colors">
-                      <td className="py-3 px-4 font-mono font-bold text-slate-600 dark:text-slate-400">{fmtDate(s.date)}</td>
-                      <td className="py-3 px-4">
-                        <div className="font-semibold text-slate-800 dark:text-slate-100">{s.patientName}</div>
-                        <div className="text-[11px] font-mono text-slate-400">{s.uhid}</div>
-                      </td>
-                      <td className="py-3 px-4 font-semibold text-slate-800 dark:text-slate-200">{s.surgery}</td>
-                      <td className="py-3 px-4 text-slate-600 dark:text-slate-300">{s.surgeon}</td>
-                      <td className="py-3 px-4 font-mono text-slate-500">{s.anesthesia}</td>
-                      <td className="py-3 px-4">
-                        <Badge tone="green">{s.outcome}</Badge>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </CardBody>
-        </Card>
-      )}
-
-      {/* ── REPORT VIEW: IUD Report ── */}
-      {activeReport === "iud_report" && (
-        <Card>
-          <CardHeader>
-            <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-              <HeartPulse className="w-4 h-4 text-pink-500" />
-              Intrauterine Contraceptive Device (IUD) Register
-            </h2>
-            <p className="text-xs text-slate-500">Reproductive health insertions, device batches, and scheduled review appointments.</p>
-          </CardHeader>
-          <CardBody className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="border-b border-slate-200 dark:border-slate-700 bg-slate-50/75 dark:bg-slate-800/50 text-[11px] uppercase tracking-wider text-slate-500">
-                    <th className="py-3 px-4">Insertion Date</th>
-                    <th className="py-3 px-4">Patient Name / UHID</th>
-                    <th className="py-3 px-4">Device Model</th>
-                    <th className="py-3 px-4">Gynecologist</th>
-                    <th className="py-3 px-4">Follow-up Due</th>
-                    <th className="py-3 px-4">Remarks</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-700/60">
-                  {iudRecords.map((iud) => (
-                    <tr key={iud.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-700/30 transition-colors">
-                      <td className="py-3 px-4 font-mono font-bold text-slate-600 dark:text-slate-400">{fmtDate(iud.date)}</td>
-                      <td className="py-3 px-4">
-                        <div className="font-semibold text-slate-800 dark:text-slate-100">{iud.patientName}</div>
-                        <div className="text-[11px] font-mono text-slate-400">{iud.uhid}</div>
-                      </td>
-                      <td className="py-3 px-4 font-semibold text-pink-700 dark:text-pink-300">{iud.deviceType}</td>
-                      <td className="py-3 px-4 text-slate-600 dark:text-slate-300">{iud.doctor}</td>
-                      <td className="py-3 px-4 font-mono text-slate-500">{fmtDate(iud.followUp)}</td>
-                      <td className="py-3 px-4 text-slate-500">{iud.remarks}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </CardBody>
-        </Card>
-      )}
-
-      {/* ── REPORT VIEW: Diagnosis (ICD-10) Epidemiology Report ── */}
-      {(activeReport === "diagnosis_report" || activeReport === "illness_report" || activeReport === "patient_by_illness" || activeReport === "icd_report") && (
-        <Card>
-          <CardHeader>
-            <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-              <Globe className="w-4 h-4 text-teal-600" />
-              ICD-10 Clinical Morbidity & Diagnosis Statistics
-            </h2>
-            <p className="text-xs text-slate-500">WHO International Classification of Diseases prevalence distribution.</p>
-          </CardHeader>
-          <CardBody className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="border-b border-slate-200 dark:border-slate-700 bg-slate-50/75 dark:bg-slate-800/50 text-[11px] uppercase tracking-wider text-slate-500">
-                    <th className="py-3 px-4">ICD-10 Code</th>
-                    <th className="py-3 px-4">Clinical Diagnosis Description</th>
-                    <th className="py-3 px-4">Primary Department</th>
-                    <th className="py-3 px-4 text-center">Case Count</th>
-                    <th className="py-3 px-4 text-right">Prevalence</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-700/60">
-                  {topDiagnoses.map((diag) => (
-                    <tr key={diag.code} className="hover:bg-slate-50/60 dark:hover:bg-slate-700/30 transition-colors">
-                      <td className="py-3 px-4 font-mono font-bold text-teal-600 dark:text-teal-400">{diag.code}</td>
-                      <td className="py-3 px-4 font-semibold text-slate-800 dark:text-slate-100">{diag.name}</td>
-                      <td className="py-3 px-4 text-slate-600 dark:text-slate-300">{diag.dept}</td>
-                      <td className="py-3 px-4 text-center font-mono font-bold">{diag.count}</td>
-                      <td className="py-3 px-4 text-right font-mono font-semibold text-slate-700 dark:text-slate-300">
-                        {diag.percentage}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </CardBody>
-        </Card>
-      )}
-
-      {/* ── REPORT VIEW: Clinical Excellence (CE) Quality Audits ── */}
-      {activeReport === "ce_reports" && (
-        <Card>
-          <CardHeader>
-            <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-              <Award className="w-4 h-4 text-amber-500" />
-              Clinical Excellence (CE) & Quality Assurance Audits
-            </h2>
-            <p className="text-xs text-slate-500">NABH Quality Key Performance Indicators & Patient Safety Metrics.</p>
-          </CardHeader>
-          <CardBody className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-                <span className="text-xs text-slate-400 uppercase font-mono">Surgical Site Infections (SSI)</span>
-                <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">0.12%</div>
-                <span className="text-[11px] text-slate-500">Benchmark: &lt; 1.0% (NABH Compliant)</span>
-              </div>
-              <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-                <span className="text-xs text-slate-400 uppercase font-mono">Hand Hygiene Adherence</span>
-                <div className="text-2xl font-bold text-sky-600 dark:text-sky-400 mt-1">94.8%</div>
-                <span className="text-[11px] text-slate-500">WHO 5 Moments Compliance</span>
-              </div>
-              <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-                <span className="text-xs text-slate-400 uppercase font-mono">Bed Occupancy Rate (BOR)</span>
-                <div className="text-2xl font-bold text-purple-600 dark:text-purple-400 mt-1">82.4%</div>
-                <span className="text-[11px] text-slate-500">Optimal clinical operating range</span>
-              </div>
-            </div>
-          </CardBody>
-        </Card>
-      )}
+                ))}
+              </tbody>
+            </table>
+          )}
+        </CardBody>
+      </Card>
     </div>
   );
 };
-
-export default ReportsERP;

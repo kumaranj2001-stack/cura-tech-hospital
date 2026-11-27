@@ -1,811 +1,509 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { useStore } from "../store/store";
-import { Card, CardHeader, CardBody, Button, Input, Label, Select, Badge, Modal } from "../components/ui";
-import { fmtDate, fmtDateTime, flashToast } from "../utils/helpers";
-import type { BiomedicalEquipment, GatePass, DailyWorksheetEntry } from "../store/types";
+import { Card, CardHeader, CardBody, Button, Badge, Modal, Input, Select, Label, EmptyState, Th, Td } from "../components/ui";
+import { fmtCurrency, flashToast, downloadCSV, today } from "../utils/helpers";
+import { erpGet, erpMutate, useErpRealtime } from "../utils/erpApi";
 import {
   Box,
-  LayoutDashboard,
   Wrench,
   ClipboardCheck,
-  FileSpreadsheet,
-  FileText,
   LogOut,
-  History,
   Upload,
-  FolderArchive,
   Plus,
-  Search,
-  CheckCircle2,
-  AlertTriangle,
-  Clock,
-  Printer,
+  RefreshCw,
   Download,
+  FileText,
+  CheckCircle2,
 } from "lucide-react";
 
-export const EquipmentsERP: React.FC<{
-  initialAction?: string;
-  dropdownOption?: string;
-}> = ({ initialAction = "equip_dashboard" }) => {
-  const { data, currentUser, currentBranch, log } = useStore();
-  const branchId = currentBranch?.id || currentUser?.branchId || "br_main";
+interface EquipmentItem {
+  id: string;
+  name: string;
+  model: string;
+  serialNumber: string;
+  department: string;
+  location: string;
+  status: string;
+  warrantyExpiry?: string;
+  amcVendor?: string;
+  lastServiceDate?: string;
+  nextServiceDue?: string;
+}
 
-  const [activeTool, setActiveTool] = useState<string>(initialAction);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [equipModalOpen, setEquipModalOpen] = useState(false);
-  const [gatePassModalOpen, setGatePassModalOpen] = useState(false);
-  const [worksheetModalOpen, setWorksheetModalOpen] = useState(false);
+interface DailyWorksheet {
+  id: string;
+  date: string;
+  equipmentId?: string;
+  equipmentName: string;
+  checkedBy: string;
+  status: string;
+  actionTaken: string;
+  remarks?: string;
+}
 
-  // In-memory Biomedical Equipments Register
-  const [equipments, setEquipments] = useState<BiomedicalEquipment[]>([
-    {
-      id: "eq_1",
-      branchId,
-      name: "Hamilton C6 Intensive Care Ventilator",
-      model: "HAM-C6-PRO",
-      serialNumber: "SN-VNT-88192",
-      department: "ICU (Bay 1)",
-      location: "Main ICU Complex Room 102",
-      status: "working",
-      purchaseDate: "2024-03-15",
-      warrantyExpiry: "2027-03-14",
-      amcVendor: "Hamilton Medical India",
-      lastServiceDate: "2026-10-12",
-      nextServiceDue: "2027-01-12",
-      createdAt: new Date().toISOString(),
-    },
-    {
-      id: "eq_2",
-      branchId,
-      name: "Philips HeartStart XL+ Biphasic Defibrillator",
-      model: "XL-PLUS-2024",
-      serialNumber: "SN-DFB-40912",
-      department: "Emergency / Trauma",
-      location: "Crash Cart Bay A",
-      status: "working",
-      purchaseDate: "2023-08-10",
-      warrantyExpiry: "2026-08-09",
-      amcVendor: "Philips Healthcare",
-      lastServiceDate: "2026-11-01",
-      nextServiceDue: "2027-02-01",
-      createdAt: new Date().toISOString(),
-    },
-    {
-      id: "eq_3",
-      branchId,
-      name: "Mindray BeneView T8 Multi-Para Patient Monitor",
-      model: "BV-T8-ULTRA",
-      serialNumber: "SN-MON-99102",
-      department: "Operation Theatre (OT 2)",
-      location: "Main Surgical Suite",
-      status: "calibration_due",
-      purchaseDate: "2024-01-20",
-      warrantyExpiry: "2027-01-19",
-      amcVendor: "Mindray Bio-Medical",
-      lastServiceDate: "2026-08-15",
-      nextServiceDue: "2026-11-15",
-      createdAt: new Date().toISOString(),
-    },
-    {
-      id: "eq_4",
-      branchId,
-      name: "Tuttnauer 3870E Large Autoclave Sterilizer",
-      model: "3870E-AUTO",
-      serialNumber: "SN-STZ-11928",
-      department: "CSSD (Sterilization)",
-      location: "Ground Floor CSSD Dept",
-      status: "under_maintenance",
-      purchaseDate: "2023-11-05",
-      amcVendor: "Tuttnauer India Support",
-      lastServiceDate: "2026-11-18",
-      nextServiceDue: "2026-11-26",
-      createdAt: new Date().toISOString(),
-    },
-  ]);
+interface GatePass {
+  id: string;
+  passNumber: string;
+  equipmentName: string;
+  purpose: string;
+  vendorName: string;
+  issuedDate: string;
+  expectedReturnDate: string;
+  actualReturnDate?: string;
+  status: string;
+  authorizedBy?: string;
+  remarks?: string;
+}
 
-  // Gate Passes Register
-  const [gatePasses, setGatePasses] = useState<GatePass[]>([
-    {
-      id: "gp_1",
-      passNumber: "GP-2026-084",
-      equipmentId: "eq_4",
-      equipmentName: "Tuttnauer 3870E Steam Pressure Chamber Assembly",
-      purpose: "Repair",
-      vendorName: "Precision Bio-Engineering Services",
-      issuedDate: "2026-11-20",
-      expectedReturnDate: "2026-11-27",
-      status: "outward",
-      authorizedBy: "Biomedical Engr. Sundar",
-      contactPerson: "Mr. Karthik (+91 98400 12345)",
-      remarks: "High pressure chamber seal replacement under warranty",
-      createdAt: new Date().toISOString(),
-    },
-    {
-      id: "gp_2",
-      passNumber: "GP-2026-085",
-      equipmentName: "Drager Anesthesia Vaporizer (Sevoflurane)",
-      purpose: "Calibration",
-      vendorName: "Drager Medical India Calibration Lab",
-      issuedDate: "2026-11-15",
-      expectedReturnDate: "2026-11-22",
-      actualReturnDate: "2026-11-21",
-      status: "returned",
-      authorizedBy: "Biomedical Engr. Sundar",
-      contactPerson: "Service Desk (+91 44 2400 9000)",
-      remarks: "Annual NABL calibration certificate obtained",
-      createdAt: new Date().toISOString(),
-    },
-  ]);
+interface EquipDocument {
+  id: string;
+  title: string;
+  category: string;
+  size: string;
+  uploadDate: string;
+  uploader: string;
+}
 
-  // Daily Worksheets Log
-  const [worksheets, setWorksheets] = useState<DailyWorksheetEntry[]>([
-    {
-      id: "ws_1",
-      date: "2026-11-24",
-      equipmentId: "eq_1",
-      equipmentName: "Hamilton C6 Ventilator",
-      checkedBy: "Engr. Sundar (BME)",
-      status: "operational",
-      actionTaken: "Pre-use calibration test & O2 cell sensor check passed.",
-      remarks: "All pressure alarms functioning within tolerance.",
-    },
-    {
-      id: "ws_2",
-      date: "2026-11-24",
-      equipmentId: "eq_2",
-      equipmentName: "Philips HeartStart Defibrillator",
-      checkedBy: "Engr. Sundar (BME)",
-      status: "operational",
-      actionTaken: "30-Joule discharge self-test verified. Battery status 100%.",
-      remarks: "Pads expiration checked: Valid till Oct 2027.",
-    },
-    {
-      id: "ws_3",
-      date: "2026-11-24",
-      equipmentId: "eq_3",
-      equipmentName: "Mindray Patient Monitor T8",
-      checkedBy: "Engr. Sundar (BME)",
-      status: "minor_fault",
-      actionTaken: "SpO2 cable sensor connector intermittent.",
-      remarks: "Replaced with backup adult sensor cable. Primary sent for repair.",
-    },
-  ]);
+interface ServiceLog {
+  id: string;
+  equipmentId?: string;
+  equipmentName: string;
+  serviceDate: string;
+  engineerName: string;
+  description: string;
+  cost: number;
+}
 
-  // Document Uploads State
-  const [documents, setDocuments] = useState([
-    { id: "doc_1", title: "Hamilton C6 Ventilator - Service Manual & Schematics", category: "Service Manual", size: "14.2 MB", uploadDate: "2026-03-15", uploader: "Admin" },
-    { id: "doc_2", title: "Philips Defibrillator NABL Calibration Certificate 2026", category: "Calibration Certificate", size: "2.8 MB", uploadDate: "2026-08-10", uploader: "Engr. Sundar" },
-    { id: "doc_3", title: "Comprehensive Annual Maintenance Contract (CAMC) Agreement", category: "AMC Contract", size: "4.5 MB", uploadDate: "2026-01-10", uploader: "Admin" },
-  ]);
+const EQUIP_TITLES: Record<string, string> = {
+  equip_dashboard: "Biomedical Equipments Dashboard",
+  equipments_list: "Biomedical Asset & Warranty Register",
+  daily_worksheet: "Daily BME Preventive Check Worksheet",
+  service_report: "Preventive Maintenance & Service Report",
+  worksheet_report: "Daily Inspection Worksheet History",
+  gate_pass_mgmt: "Outward / Returnable Equipment Gate Pass",
+  gate_pass_report: "Gate Pass Movement Register",
+  document_upload: "Upload Calibration & Service Documents",
+  documents_report: "Equipment Manuals & Compliance Archive",
+};
 
-  // Form states
-  const [newEquipForm, setNewEquipForm] = useState({
-    name: "",
-    model: "",
-    serialNumber: "",
-    department: "ICU (Bay 1)",
-    location: "Main Medical Wing",
-    status: "working" as any,
-    amcVendor: "",
-    nextServiceDue: "2027-02-15",
-  });
+export const EquipmentsERP: React.FC<{ initialAction?: string; dropdownOption?: string }> = ({
+  initialAction = "equip_dashboard",
+  dropdownOption,
+}) => {
+  const { currentBranch, viewBranchId, currentUser, log } = useStore();
+  const currentBranchId = viewBranchId || currentBranch?.id || "br_main";
+  const [activeTool, setActiveTool] = useState(initialAction);
+  const [loading, setLoading] = useState(false);
 
-  const [newGatePassForm, setNewGatePassForm] = useState({
-    equipmentName: "",
-    purpose: "Repair" as any,
-    vendorName: "",
-    expectedReturnDate: "2026-12-01",
-    contactPerson: "",
-    remarks: "",
-  });
+  const [equipments, setEquipments] = useState<EquipmentItem[]>([]);
+  const [worksheets, setWorksheets] = useState<DailyWorksheet[]>([]);
+  const [gatePasses, setGatePasses] = useState<GatePass[]>([]);
+  const [documents, setDocuments] = useState<EquipDocument[]>([]);
+  const [serviceLogs, setServiceLogs] = useState<ServiceLog[]>([]);
 
-  const handleAddEquipment = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newEquipForm.name.trim() || !newEquipForm.serialNumber.trim()) {
-      flashToast("Please provide equipment name and serial number", "warn");
-      return;
+  const [eqModalOpen, setEqModalOpen] = useState(false);
+  const [wsModalOpen, setWsModalOpen] = useState(false);
+  const [gpModalOpen, setGpModalOpen] = useState(false);
+  const [srvModalOpen, setSrvModalOpen] = useState(false);
+  const [docModalOpen, setDocModalOpen] = useState(false);
+
+  const [eqForm, setEqForm] = useState({ name: "", model: "", serialNumber: "", department: "ICU", location: "ICU Floor 1", status: "working", amcVendor: "", warrantyExpiry: "2027-12-31" });
+  const [wsForm, setWsForm] = useState({ equipmentName: "", status: "operational", actionTaken: "Calibration & alarm verification passed", remarks: "" });
+  const [gpForm, setGpForm] = useState({ equipmentName: "", purpose: "Calibration", vendorName: "", expectedReturnDate: today(), remarks: "" });
+  const [srvForm, setSrvForm] = useState({ equipmentName: "", engineerName: "Engr. Sundar (BME)", description: "", cost: "2500" });
+  const [docForm, setDocForm] = useState({ title: "", category: "Calibration Certificate", size: "1.8 MB" });
+
+  useEffect(() => {
+    if (initialAction) setActiveTool(initialAction);
+  }, [initialAction, dropdownOption]);
+
+  const loadEquipments = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await erpGet("/api/equipments");
+      setEquipments(res.equipments || []);
+      setWorksheets(res.worksheets || []);
+      setGatePasses(res.gatePasses || []);
+      setDocuments(res.documents || []);
+      setServiceLogs(res.serviceLogs || []);
+    } catch (err: any) {
+      flashToast(err?.message || "Failed loading equipments ERP", "warn");
+    } finally {
+      setLoading(false);
     }
+  }, []);
 
-    const newEquip: BiomedicalEquipment = {
-      id: "eq_" + Date.now(),
-      branchId,
-      name: newEquipForm.name.trim(),
-      model: newEquipForm.model.trim() || "STD-2026",
-      serialNumber: newEquipForm.serialNumber.trim(),
-      department: newEquipForm.department,
-      location: newEquipForm.location,
-      status: newEquipForm.status,
-      purchaseDate: new Date().toISOString().slice(0, 10),
-      amcVendor: newEquipForm.amcVendor.trim() || "Authorized Service Partner",
-      nextServiceDue: newEquipForm.nextServiceDue,
-      createdAt: new Date().toISOString(),
-    };
+  useEffect(() => {
+    loadEquipments();
+  }, [loadEquipments]);
 
-    setEquipments([newEquip, ...equipments]);
-    log("EQUIPMENT_REGISTERED", `Added ${newEquip.name} (${newEquip.serialNumber})`);
-    flashToast(`Biomedical asset ${newEquip.name} registered!`);
-    setEquipModalOpen(false);
+  useErpRealtime("equipments", loadEquipments);
+
+  const maintenanceDueCount = useMemo(() => equipments.filter((e) => e.status !== "working").length, [equipments]);
+  const outwardGpCount = useMemo(() => gatePasses.filter((g) => g.status === "outward").length, [gatePasses]);
+
+  const handleSaveEquipment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!eqForm.name.trim()) return flashToast("Equipment name required", "warn");
+    try {
+      await erpMutate("/api/equipments", {
+        action: "equipment",
+        branchId: currentBranchId === "all" ? "br_main" : currentBranchId,
+        ...eqForm,
+        lastServiceDate: today(),
+      });
+      setEqModalOpen(false);
+      setEqForm({ name: "", model: "", serialNumber: "", department: "ICU", location: "ICU Floor 1", status: "working", amcVendor: "", warrantyExpiry: "2027-12-31" });
+      await loadEquipments();
+      flashToast("Biomedical asset registered", "ok");
+    } catch (err: any) {
+      flashToast(err?.message || "Failed adding equipment", "warn");
+    }
   };
 
-  const handleCreateGatePass = (e: React.FormEvent) => {
+  const handleSaveWorksheet = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newGatePassForm.equipmentName.trim() || !newGatePassForm.vendorName.trim()) {
-      flashToast("Please provide equipment and vendor name", "warn");
-      return;
+    if (!wsForm.equipmentName.trim()) return flashToast("Select or enter equipment", "warn");
+    try {
+      await erpMutate("/api/equipments", {
+        action: "worksheet",
+        ...wsForm,
+        checkedBy: currentUser?.name || "BME Engineer",
+        date: today(),
+      });
+      setWsModalOpen(false);
+      setWsForm({ equipmentName: "", status: "operational", actionTaken: "Calibration & alarm verification passed", remarks: "" });
+      await loadEquipments();
+      flashToast("Daily BME worksheet logged", "ok");
+    } catch (err: any) {
+      flashToast(err?.message || "Failed saving worksheet", "warn");
     }
-
-    const passNumber = `GP-2026-${Math.floor(100 + Math.random() * 900)}`;
-    const newPass: GatePass = {
-      id: "gp_" + Date.now(),
-      passNumber,
-      equipmentName: newGatePassForm.equipmentName.trim(),
-      purpose: newGatePassForm.purpose,
-      vendorName: newGatePassForm.vendorName.trim(),
-      issuedDate: new Date().toISOString().slice(0, 10),
-      expectedReturnDate: newGatePassForm.expectedReturnDate,
-      status: "outward",
-      authorizedBy: currentUser?.name || "Biomedical Engineer",
-      contactPerson: newGatePassForm.contactPerson.trim(),
-      remarks: newGatePassForm.remarks.trim(),
-      createdAt: new Date().toISOString(),
-    };
-
-    setGatePasses([newPass, ...gatePasses]);
-    log("GATE_PASS_ISSUED", `Issued outward pass ${passNumber} for ${newPass.equipmentName}`);
-    flashToast(`Gate Pass ${passNumber} issued!`);
-    setGatePassModalOpen(false);
   };
 
-  const filteredEquipments = equipments.filter((eq) => {
-    const q = searchQuery.toLowerCase().trim();
-    if (!q) return true;
-    return (
-      eq.name.toLowerCase().includes(q) ||
-      eq.serialNumber.toLowerCase().includes(q) ||
-      eq.department.toLowerCase().includes(q) ||
-      eq.model.toLowerCase().includes(q)
-    );
-  });
+  const handleSaveGatePass = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!gpForm.equipmentName.trim() || !gpForm.vendorName.trim()) return flashToast("Equipment and vendor required", "warn");
+    try {
+      await erpMutate("/api/equipments", {
+        action: "gate-pass",
+        ...gpForm,
+        issuedDate: today(),
+        status: "outward",
+        authorizedBy: currentUser?.name || "BME Desk",
+      });
+      setGpModalOpen(false);
+      setGpForm({ equipmentName: "", purpose: "Calibration", vendorName: "", expectedReturnDate: today(), remarks: "" });
+      await loadEquipments();
+      flashToast("Outward gate pass issued", "ok");
+    } catch (err: any) {
+      flashToast(err?.message || "Failed issuing gate pass", "warn");
+    }
+  };
+
+  const handleReturnGatePass = async (gp: GatePass) => {
+    try {
+      await erpMutate("/api/equipments", { action: "gate-pass", id: gp.id, status: "returned", actualReturnDate: today() }, "PUT");
+      await loadEquipments();
+      flashToast(`Marked ${gp.passNumber} returned`, "ok");
+    } catch (err: any) {
+      flashToast(err?.message || "Gate pass update failed", "warn");
+    }
+  };
+
+  const handleSaveServiceLog = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!srvForm.equipmentName.trim() || !srvForm.description.trim()) return flashToast("Equipment and service description required", "warn");
+    try {
+      await erpMutate("/api/equipments", {
+        action: "service",
+        ...srvForm,
+        cost: Number(srvForm.cost) || 0,
+        serviceDate: today(),
+      });
+      log("EQUIPMENT_SERVICE", `Logged service for ${srvForm.equipmentName}`);
+      setSrvModalOpen(false);
+      setSrvForm({ equipmentName: "", engineerName: "Engr. Sundar (BME)", description: "", cost: "2500" });
+      await loadEquipments();
+      flashToast("Equipment service report logged", "ok");
+    } catch (err: any) {
+      flashToast(err?.message || "Failed logging service", "warn");
+    }
+  };
+
+  const handleUploadDoc = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!docForm.title.trim()) return flashToast("Document title required", "warn");
+    try {
+      await erpMutate("/api/equipments", {
+        action: "document",
+        ...docForm,
+        uploader: currentUser?.name || "BME Desk",
+      });
+      setDocModalOpen(false);
+      setDocForm({ title: "", category: "Calibration Certificate", size: "1.8 MB" });
+      await loadEquipments();
+      flashToast("Equipment document archived", "ok");
+    } catch (err: any) {
+      flashToast(err?.message || "Failed uploading document", "warn");
+    }
+  };
 
   return (
-    <div className="space-y-6">
-      {/* Banner */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-gradient-to-r from-slate-800 via-slate-900 to-indigo-950 text-white p-6 rounded-2xl shadow-lg border border-slate-700">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <span className="bg-sky-500/30 text-sky-200 text-xs font-semibold px-2.5 py-0.5 rounded-full border border-sky-400/40">
-              Biomedical Engineering & Assets
-            </span>
-            <span className="text-xs text-slate-300">Equipments · Daily Worksheets · Gate Passes · Documents</span>
+    <div className="space-y-5">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Box className="w-5 h-5 text-blue-600" />
+            <h1 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white">{EQUIP_TITLES[activeTool] || "Biomedical Equipments ERP"}</h1>
+            {loading && <Badge tone="amber">Syncing...</Badge>}
           </div>
-          <h1 className="text-2xl font-bold tracking-tight">Hospital Equipments & Asset Management</h1>
-          <p className="text-slate-300 text-sm max-w-xl">
-            Maintain master biomedical assets (Ventilators, Defibrillators, Monitors, Dialysis Units), log daily inspection worksheets, issue outward repair gate passes, and track service contracts.
-          </p>
+          <p className="text-xs text-slate-500 mt-0.5">Asset lifecycle, NABL calibration logs, outward gate passes & BME documentation</p>
         </div>
-
-        <div className="flex items-center gap-2.5 flex-wrap">
-          <Button
-            className="bg-sky-600 hover:bg-sky-700 text-white text-xs font-semibold shadow-md"
-            onClick={() => setEquipModalOpen(true)}
-          >
-            <Plus className="w-3.5 h-3.5 mr-1" />
-            Add Equipment
-          </Button>
-          <Button
-            variant="secondary"
-            className="bg-white/10 hover:bg-white/20 text-white border-white/20 text-xs"
-            onClick={() => setGatePassModalOpen(true)}
-          >
-            <LogOut className="w-3.5 h-3.5 mr-1 text-amber-300" />
-            Issue Gate Pass
-          </Button>
-        </div>
-      </div>
-
-      {/* Tool Navigation Switcher */}
-      <div className="flex items-center justify-between bg-slate-100 dark:bg-slate-800 p-2 rounded-xl text-xs overflow-x-auto">
-        <div className="flex items-center gap-2 font-medium">
-          <span className="text-slate-400 font-mono uppercase">ACTIVE TOOL:</span>
-          <span className="bg-white dark:bg-slate-700 text-sky-700 dark:text-sky-300 px-2.5 py-1 rounded-md font-bold shadow-xs">
-            {activeTool.replace("_", " ").toUpperCase()}
-          </span>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setActiveTool("equip_dashboard")}
-            className="px-2.5 py-1 rounded bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:text-sky-600 font-medium"
-          >
-            Dashboard
-          </button>
-          <button
-            onClick={() => setActiveTool("equipments_list")}
-            className="px-2.5 py-1 rounded bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:text-sky-600 font-medium"
-          >
-            Equipments List
-          </button>
-          <button
-            onClick={() => setActiveTool("daily_worksheet")}
-            className="px-2.5 py-1 rounded bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:text-sky-600 font-medium"
-          >
-            Daily Worksheet
-          </button>
-          <button
-            onClick={() => setActiveTool("gate_pass_mgmt")}
-            className="px-2.5 py-1 rounded bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:text-sky-600 font-medium"
-          >
-            Gate Pass
-          </button>
-          <button
-            onClick={() => setActiveTool("documents_report")}
-            className="px-2.5 py-1 rounded bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:text-sky-600 font-medium"
-          >
-            Documents
-          </button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="secondary" size="sm" onClick={loadEquipments}><RefreshCw className="w-4 h-4" /> Refresh</Button>
+          <Button variant="secondary" size="sm" onClick={() => setWsModalOpen(true)}><ClipboardCheck className="w-4 h-4" /> Log Worksheet</Button>
+          <Button variant="primary" size="sm" onClick={() => setEqModalOpen(true)}><Plus className="w-4 h-4" /> Add Equipment</Button>
         </div>
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <div className="p-4 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm">
-          <div className="text-xs text-slate-400 font-semibold uppercase">Total Biomedical Assets</div>
-          <div className="text-2xl font-bold text-slate-800 dark:text-slate-100 mt-2">{equipments.length}</div>
-          <span className="text-xs text-slate-500">Master register</span>
-        </div>
-        <div className="p-4 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm">
-          <div className="text-xs text-slate-400 font-semibold uppercase">Operational & Working</div>
-          <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 mt-2">
-            {equipments.filter((e) => e.status === "working").length}
-          </div>
-          <span className="text-xs text-slate-500">100% Verified in wards</span>
-        </div>
-        <div className="p-4 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm">
-          <div className="text-xs text-slate-400 font-semibold uppercase">Active Gate Passes</div>
-          <div className="text-2xl font-bold text-amber-600 dark:text-amber-400 mt-2">
-            {gatePasses.filter((g) => g.status === "outward").length}
-          </div>
-          <span className="text-xs text-slate-500">Items outside for repair</span>
-        </div>
-        <div className="p-4 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm">
-          <div className="text-xs text-slate-400 font-semibold uppercase">Daily Inspections Logged</div>
-          <div className="text-2xl font-bold text-sky-600 dark:text-sky-400 mt-2">{worksheets.length}</div>
-          <span className="text-xs text-slate-500">Today's engineer checklist</span>
-        </div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <Card className="p-4 border-l-4 border-l-blue-500">
+          <div className="text-xs font-semibold text-slate-500 uppercase">Registered Assets</div>
+          <div className="text-2xl font-bold text-slate-900 dark:text-white mt-1">{equipments.length}</div>
+        </Card>
+        <Card className="p-4 border-l-4 border-l-amber-500">
+          <div className="text-xs font-semibold text-slate-500 uppercase">Calibration / Service Due</div>
+          <div className="text-2xl font-bold text-amber-600 mt-1">{maintenanceDueCount}</div>
+        </Card>
+        <Card className="p-4 border-l-4 border-l-rose-500">
+          <div className="text-xs font-semibold text-slate-500 uppercase">Outward Gate Passes</div>
+          <div className="text-2xl font-bold text-rose-600 mt-1">{outwardGpCount}</div>
+        </Card>
+        <Card className="p-4 border-l-4 border-l-emerald-500">
+          <div className="text-xs font-semibold text-slate-500 uppercase">Compliance Docs</div>
+          <div className="text-2xl font-bold text-emerald-600 mt-1">{documents.length}</div>
+        </Card>
       </div>
 
-      {/* ── TOOL VIEW: Dashboard & Equipments Master List ── */}
-      {(activeTool === "equip_dashboard" || activeTool === "equipments_list") && (
+      {/* Conditional Sections */}
+      {activeTool === "daily_worksheet" || activeTool === "worksheet_report" ? (
         <Card>
-          <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                <Wrench className="w-4 h-4 text-sky-600" />
-                Master Biomedical Equipment Inventory & Status
-              </h2>
-              <p className="text-xs text-slate-500">Asset locations, serial tags, AMC contracts, and next service calibration dates.</p>
-            </div>
-            <div className="w-72">
-              <div className="relative">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                <Input
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search equipment or serial #..."
-                  className="pl-9 text-xs"
-                />
+          <CardHeader
+            title="Daily Biomedical Inspection Worksheets"
+            right={
+              <div className="flex gap-2">
+                <Button size="sm" variant="secondary" onClick={() => downloadCSV("bme_worksheets.csv", worksheets as any[])}><Download className="w-3.5 h-3.5" /> CSV</Button>
+                <Button size="sm" onClick={() => setWsModalOpen(true)}><Plus className="w-3.5 h-3.5" /> New Entry</Button>
               </div>
-            </div>
-          </CardHeader>
-          <CardBody className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="border-b border-slate-200 dark:border-slate-700 bg-slate-50/75 dark:bg-slate-800/50 text-[11px] uppercase tracking-wider text-slate-500">
-                    <th className="py-3 px-4">Equipment Name</th>
-                    <th className="py-3 px-4">Model & Serial #</th>
-                    <th className="py-3 px-4">Department & Location</th>
-                    <th className="py-3 px-4">AMC Vendor</th>
-                    <th className="py-3 px-4">Next Service Due</th>
-                    <th className="py-3 px-4">Operational Status</th>
-                    <th className="py-3 px-4 text-right">Actions</th>
+            }
+          />
+          <CardBody className="p-0 overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead><tr><Th>Date</Th><Th>Equipment</Th><Th>Engineer</Th><Th>Action Taken</Th><Th>Status</Th></tr></thead>
+              <tbody>
+                {worksheets.map((w) => (
+                  <tr key={w.id} className="border-t border-slate-100 dark:border-slate-800">
+                    <Td>{w.date}</Td><Td className="font-semibold">{w.equipmentName}</Td><Td>{w.checkedBy}</Td>
+                    <Td>{w.actionTaken}</Td><Td><Badge tone={w.status === "operational" ? "green" : "amber"}>{w.status}</Badge></Td>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-700/60">
-                  {filteredEquipments.map((eq) => (
-                    <tr key={eq.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-700/30 transition-colors">
-                      <td className="py-3 px-4 font-bold text-slate-800 dark:text-slate-100">{eq.name}</td>
-                      <td className="py-3 px-4 font-mono text-slate-600 dark:text-slate-300">
-                        <div>{eq.model}</div>
-                        <div className="text-[10px] text-slate-400">{eq.serialNumber}</div>
-                      </td>
-                      <td className="py-3 px-4">
-                        <div className="font-semibold text-slate-700 dark:text-slate-200">{eq.department}</div>
-                        <div className="text-[10px] text-slate-400">{eq.location}</div>
-                      </td>
-                      <td className="py-3 px-4 text-slate-600 dark:text-slate-300">{eq.amcVendor}</td>
-                      <td className="py-3 px-4 font-mono text-slate-600 dark:text-slate-300">{fmtDate(eq.nextServiceDue)}</td>
-                      <td className="py-3 px-4">
-                        <Badge
-                          tone={
-                            eq.status === "working"
-                              ? "green"
-                              : eq.status === "calibration_due"
-                              ? "amber"
-                              : "red"
-                          }
-                        >
-                          {eq.status.replace("_", " ").toUpperCase()}
-                        </Badge>
-                      </td>
-                      <td className="py-3 px-4 text-right">
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          className="text-xs h-7 px-2"
-                          onClick={() => flashToast(`Service worksheet logged for ${eq.name}`)}
-                        >
-                          <ClipboardCheck className="w-3.5 h-3.5 mr-1" />
-                          Inspect
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                ))}
+              </tbody>
+            </table>
           </CardBody>
         </Card>
-      )}
-
-      {/* ── TOOL VIEW: Daily Worksheet ── */}
-      {(activeTool === "daily_worksheet" || activeTool === "worksheet_report") && (
+      ) : activeTool === "service_report" ? (
         <Card>
-          <CardHeader>
-            <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-              <ClipboardCheck className="w-4 h-4 text-emerald-600" />
-              Biomedical Engineer Daily Inspection Worksheet
-            </h2>
-            <p className="text-xs text-slate-500">Routine pre-use checks, electrical safety, calibration readings, and sensor tests.</p>
-          </CardHeader>
-          <CardBody className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="border-b border-slate-200 dark:border-slate-700 bg-slate-50/75 dark:bg-slate-800/50 text-[11px] uppercase tracking-wider text-slate-500">
-                    <th className="py-3 px-4">Date</th>
-                    <th className="py-3 px-4">Equipment Inspected</th>
-                    <th className="py-3 px-4">Inspecting Engineer</th>
-                    <th className="py-3 px-4">Status & Finding</th>
-                    <th className="py-3 px-4">Action Taken & Remarks</th>
+          <CardHeader
+            title="Preventive & Breakdown Service Reports"
+            right={
+              <div className="flex gap-2">
+                <Button size="sm" variant="secondary" onClick={() => downloadCSV("equipment_service_report.csv", serviceLogs as any[])}><Download className="w-3.5 h-3.5" /> CSV</Button>
+                <Button size="sm" onClick={() => setSrvModalOpen(true)}><Wrench className="w-3.5 h-3.5" /> Log Service</Button>
+              </div>
+            }
+          />
+          <CardBody className="p-0 overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead><tr><Th>Date</Th><Th>Equipment</Th><Th>Engineer</Th><Th>Service Description</Th><Th className="text-right">Cost</Th></tr></thead>
+              <tbody>
+                {serviceLogs.map((s) => (
+                  <tr key={s.id} className="border-t border-slate-100 dark:border-slate-800">
+                    <Td>{s.serviceDate}</Td><Td className="font-semibold">{s.equipmentName}</Td><Td>{s.engineerName}</Td>
+                    <Td>{s.description}</Td><Td className="text-right font-bold">{fmtCurrency(s.cost)}</Td>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-700/60">
-                  {worksheets.map((ws) => (
-                    <tr key={ws.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-700/30 transition-colors">
-                      <td className="py-3 px-4 font-mono font-bold text-slate-600 dark:text-slate-400">{fmtDate(ws.date)}</td>
-                      <td className="py-3 px-4 font-bold text-slate-800 dark:text-slate-100">{ws.equipmentName}</td>
-                      <td className="py-3 px-4 text-slate-600 dark:text-slate-300">{ws.checkedBy}</td>
-                      <td className="py-3 px-4">
-                        <Badge tone={ws.status === "operational" ? "green" : "amber"}>
-                          {ws.status.replace("_", " ").toUpperCase()}
-                        </Badge>
-                      </td>
-                      <td className="py-3 px-4 text-slate-700 dark:text-slate-200">
-                        <div>{ws.actionTaken}</div>
-                        <div className="text-[11px] text-slate-400">{ws.remarks}</div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                ))}
+              </tbody>
+            </table>
           </CardBody>
         </Card>
-      )}
-
-      {/* ── TOOL VIEW: Gate Pass Management ── */}
-      {(activeTool === "gate_pass_mgmt" || activeTool === "gate_pass_report") && (
+      ) : activeTool === "gate_pass_mgmt" || activeTool === "gate_pass_report" ? (
         <Card>
-          <CardHeader className="flex items-center justify-between">
-            <div>
-              <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                <LogOut className="w-4 h-4 text-amber-500" />
-                Equipment Outward Gate Pass Register
-              </h2>
-              <p className="text-xs text-slate-500">Security authorization for biomedical units taken outside hospital premises for repair.</p>
-            </div>
-            <Button size="sm" className="bg-amber-600 hover:bg-amber-700 text-white text-xs" onClick={() => setGatePassModalOpen(true)}>
-              <Plus className="w-3.5 h-3.5 mr-1" />
-              New Gate Pass
-            </Button>
-          </CardHeader>
-          <CardBody className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="border-b border-slate-200 dark:border-slate-700 bg-slate-50/75 dark:bg-slate-800/50 text-[11px] uppercase tracking-wider text-slate-500">
-                    <th className="py-3 px-4">Pass #</th>
-                    <th className="py-3 px-4">Equipment Dispatched</th>
-                    <th className="py-3 px-4">Purpose</th>
-                    <th className="py-3 px-4">Vendor & Contact</th>
-                    <th className="py-3 px-4">Dispatch Date</th>
-                    <th className="py-3 px-4">Expected Return</th>
-                    <th className="py-3 px-4">Status</th>
-                    <th className="py-3 px-4 text-right">Actions</th>
+          <CardHeader
+            title="Equipment Outward / Returnable Gate Pass Register"
+            right={
+              <div className="flex gap-2">
+                <Button size="sm" variant="secondary" onClick={() => downloadCSV("gate_passes.csv", gatePasses as any[])}><Download className="w-3.5 h-3.5" /> CSV</Button>
+                <Button size="sm" onClick={() => setGpModalOpen(true)}><LogOut className="w-3.5 h-3.5" /> Issue Gate Pass</Button>
+              </div>
+            }
+          />
+          <CardBody className="p-0 overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead><tr><Th>Pass #</Th><Th>Equipment</Th><Th>Purpose</Th><Th>Vendor</Th><Th>Expected Return</Th><Th>Status</Th><Th className="text-right">Action</Th></tr></thead>
+              <tbody>
+                {gatePasses.map((gp) => (
+                  <tr key={gp.id} className="border-t border-slate-100 dark:border-slate-800">
+                    <Td className="font-mono text-xs">{gp.passNumber}</Td><Td className="font-semibold">{gp.equipmentName}</Td>
+                    <Td>{gp.purpose}</Td><Td>{gp.vendorName}</Td><Td>{gp.expectedReturnDate}</Td>
+                    <Td><Badge tone={gp.status === "returned" ? "green" : "amber"}>{gp.status}</Badge></Td>
+                    <Td className="text-right">
+                      {gp.status === "outward" && (
+                        <Button size="sm" variant="success" onClick={() => handleReturnGatePass(gp)}><CheckCircle2 className="w-3.5 h-3.5" /> Mark Returned</Button>
+                      )}
+                    </Td>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-700/60">
-                  {gatePasses.map((gp) => (
-                    <tr key={gp.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-700/30 transition-colors">
-                      <td className="py-3 px-4 font-mono font-bold text-amber-600 dark:text-amber-400">{gp.passNumber}</td>
-                      <td className="py-3 px-4 font-bold text-slate-800 dark:text-slate-100">{gp.equipmentName}</td>
-                      <td className="py-3 px-4">
-                        <span className="font-semibold text-slate-700 dark:text-slate-200">{gp.purpose}</span>
-                      </td>
-                      <td className="py-3 px-4 text-slate-600 dark:text-slate-300">
-                        <div>{gp.vendorName}</div>
-                        <div className="text-[10px] text-slate-400">{gp.contactPerson}</div>
-                      </td>
-                      <td className="py-3 px-4 font-mono text-slate-500">{fmtDate(gp.issuedDate)}</td>
-                      <td className="py-3 px-4 font-mono text-slate-500">{fmtDate(gp.expectedReturnDate)}</td>
-                      <td className="py-3 px-4">
-                        <Badge tone={gp.status === "returned" ? "green" : "amber"}>{gp.status.toUpperCase()}</Badge>
-                      </td>
-                      <td className="py-3 px-4 text-right">
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          className="text-xs h-7 px-2"
-                          onClick={() => window.print()}
-                        >
-                          <Printer className="w-3.5 h-3.5 mr-1" />
-                          Print Pass
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                ))}
+              </tbody>
+            </table>
           </CardBody>
         </Card>
-      )}
-
-      {/* ── TOOL VIEW: Documents & Manuals Repository ── */}
-      {(activeTool === "document_upload" || activeTool === "documents_report") && (
+      ) : activeTool === "document_upload" || activeTool === "documents_report" ? (
         <Card>
-          <CardHeader className="flex items-center justify-between">
-            <div>
-              <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                <FolderArchive className="w-4 h-4 text-indigo-500" />
-                Equipment Manuals, Schematics & AMC Document Vault
-              </h2>
-              <p className="text-xs text-slate-500">Repository of digital PDF operator guides, calibration certificates, and service contracts.</p>
-            </div>
-            <Button
-              size="sm"
-              className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs"
-              onClick={() => flashToast("Document upload dialog launched!")}
-            >
-              <Upload className="w-3.5 h-3.5 mr-1" />
-              Upload PDF
-            </Button>
-          </CardHeader>
-          <CardBody className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="border-b border-slate-200 dark:border-slate-700 bg-slate-50/75 dark:bg-slate-800/50 text-[11px] uppercase tracking-wider text-slate-500">
-                    <th className="py-3 px-4">Document Title</th>
-                    <th className="py-3 px-4">Category</th>
-                    <th className="py-3 px-4">File Size</th>
-                    <th className="py-3 px-4">Upload Date</th>
-                    <th className="py-3 px-4">Uploaded By</th>
-                    <th className="py-3 px-4 text-right">Download</th>
+          <CardHeader
+            title="Equipment Manuals & Calibration Documents"
+            right={<Button size="sm" onClick={() => setDocModalOpen(true)}><Upload className="w-3.5 h-3.5" /> Upload Document</Button>}
+          />
+          <CardBody className="p-0 overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead><tr><Th>Document Title</Th><Th>Category</Th><Th>Size</Th><Th>Uploaded Date</Th><Th>Uploader</Th></tr></thead>
+              <tbody>
+                {documents.map((d) => (
+                  <tr key={d.id} className="border-t border-slate-100 dark:border-slate-800">
+                    <Td className="font-semibold"><FileText className="w-3.5 h-3.5 inline mr-1.5 text-blue-600" />{d.title}</Td>
+                    <Td><Badge tone="blue">{d.category}</Badge></Td><Td>{d.size}</Td><Td>{d.uploadDate}</Td><Td>{d.uploader}</Td>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-700/60">
-                  {documents.map((doc) => (
-                    <tr key={doc.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-700/30 transition-colors">
-                      <td className="py-3 px-4 font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                        <FileText className="w-4 h-4 text-indigo-500 shrink-0" />
-                        {doc.title}
-                      </td>
-                      <td className="py-3 px-4 font-medium text-slate-700 dark:text-slate-200">{doc.category}</td>
-                      <td className="py-3 px-4 font-mono text-slate-500">{doc.size}</td>
-                      <td className="py-3 px-4 font-mono text-slate-500">{fmtDate(doc.uploadDate)}</td>
-                      <td className="py-3 px-4 text-slate-600 dark:text-slate-300">{doc.uploader}</td>
-                      <td className="py-3 px-4 text-right">
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          className="text-xs h-7 px-2"
-                          onClick={() => flashToast(`Downloading ${doc.title}`)}
-                        >
-                          <Download className="w-3.5 h-3.5 mr-1" />
-                          View
-                        </Button>
-                      </td>
+                ))}
+              </tbody>
+            </table>
+          </CardBody>
+        </Card>
+      ) : (
+        /* equip_dashboard & equipments_list */
+        <Card>
+          <CardHeader
+            title="Biomedical Asset Registry"
+            right={<Button size="sm" variant="secondary" onClick={() => downloadCSV("biomedical_equipments.csv", equipments as any[])}><Download className="w-3.5 h-3.5" /> CSV</Button>}
+          />
+          <CardBody className="p-0 overflow-x-auto">
+            {equipments.length === 0 ? (
+              <EmptyState icon="🩺" title="No equipments registered" sub="Add a ventilator, monitor, or analyzer asset." />
+            ) : (
+              <table className="w-full text-sm">
+                <thead><tr><Th>Equipment Name</Th><Th>Model / Serial</Th><Th>Department</Th><Th>AMC Vendor</Th><Th>Next Service Due</Th><Th>Status</Th></tr></thead>
+                <tbody>
+                  {equipments.map((eq) => (
+                    <tr key={eq.id} className="border-t border-slate-100 dark:border-slate-800">
+                      <Td className="font-semibold">{eq.name}</Td>
+                      <Td className="text-xs font-mono">{eq.model} / {eq.serialNumber}</Td>
+                      <Td>{eq.department}</Td>
+                      <Td>{eq.amcVendor || "—"}</Td>
+                      <Td>{eq.nextServiceDue || "—"}</Td>
+                      <Td><Badge tone={eq.status === "working" ? "green" : eq.status === "calibration_due" ? "amber" : "red"}>{eq.status.replace("_", " ")}</Badge></Td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-            </div>
+            )}
           </CardBody>
         </Card>
       )}
 
-      {/* ── MODAL: Add Equipment ── */}
-      <Modal
-        open={equipModalOpen}
-        onClose={() => setEquipModalOpen(false)}
-        title="Register New Biomedical Equipment"
-        size="md"
-      >
-        <form onSubmit={handleAddEquipment} className="space-y-4">
-          <div>
-            <Label>Equipment Name & Description *</Label>
-            <Input
-              required
-              value={newEquipForm.name}
-              onChange={(e) => setNewEquipForm({ ...newEquipForm, name: e.target.value })}
-              placeholder="e.g. Hamilton C6 ICU Ventilator"
-            />
+      {/* Modals */}
+      <Modal open={eqModalOpen} onClose={() => setEqModalOpen(false)} title="Register Biomedical Equipment">
+        <form onSubmit={handleSaveEquipment} className="space-y-3">
+          <div><Label>Equipment Name *</Label><Input value={eqForm.name} onChange={(e) => setEqForm({ ...eqForm, name: e.target.value })} required /></div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><Label>Model</Label><Input value={eqForm.model} onChange={(e) => setEqForm({ ...eqForm, model: e.target.value })} /></div>
+            <div><Label>Serial Number</Label><Input value={eqForm.serialNumber} onChange={(e) => setEqForm({ ...eqForm, serialNumber: e.target.value })} /></div>
           </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label>Model Number</Label>
-              <Input
-                value={newEquipForm.model}
-                onChange={(e) => setNewEquipForm({ ...newEquipForm, model: e.target.value })}
-                placeholder="e.g. C6-PRO-2026"
-              />
-            </div>
-            <div>
-              <Label>Serial Tag # *</Label>
-              <Input
-                required
-                value={newEquipForm.serialNumber}
-                onChange={(e) => setNewEquipForm({ ...newEquipForm, serialNumber: e.target.value })}
-                placeholder="e.g. SN-881920"
-              />
-            </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><Label>Department</Label><Input value={eqForm.department} onChange={(e) => setEqForm({ ...eqForm, department: e.target.value })} /></div>
+            <div><Label>AMC Vendor</Label><Input value={eqForm.amcVendor} onChange={(e) => setEqForm({ ...eqForm, amcVendor: e.target.value })} /></div>
           </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label>Department</Label>
-              <Select
-                value={newEquipForm.department}
-                onChange={(e) => setNewEquipForm({ ...newEquipForm, department: e.target.value })}
-              >
-                <option value="ICU (Bay 1)">ICU (Bay 1)</option>
-                <option value="Operation Theatre (OT 2)">Operation Theatre</option>
-                <option value="Emergency / Trauma">Emergency / Trauma</option>
-                <option value="CSSD (Sterilization)">CSSD Dept</option>
-                <option value="Dialysis Unit">Dialysis Unit</option>
-              </Select>
-            </div>
-            <div>
-              <Label>Operational Status</Label>
-              <Select
-                value={newEquipForm.status}
-                onChange={(e) => setNewEquipForm({ ...newEquipForm, status: e.target.value as any })}
-              >
-                <option value="working">Working (Operational)</option>
-                <option value="calibration_due">Calibration Due</option>
-                <option value="under_maintenance">Under Maintenance</option>
-                <option value="breakdown">Breakdown</option>
-              </Select>
-            </div>
-          </div>
-
-          <div>
-            <Label>AMC / CMC Service Vendor</Label>
-            <Input
-              value={newEquipForm.amcVendor}
-              onChange={(e) => setNewEquipForm({ ...newEquipForm, amcVendor: e.target.value })}
-              placeholder="e.g. Philips Healthcare Support"
-            />
-          </div>
-
-          <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-200 dark:border-slate-700">
-            <Button variant="secondary" onClick={() => setEquipModalOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" className="bg-sky-600 hover:bg-sky-700 text-white font-semibold">
-              Save Equipment
-            </Button>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="secondary" type="button" onClick={() => setEqModalOpen(false)}>Cancel</Button>
+            <Button type="submit">Save Asset</Button>
           </div>
         </form>
       </Modal>
 
-      {/* ── MODAL: Issue Gate Pass ── */}
-      <Modal
-        open={gatePassModalOpen}
-        onClose={() => setGatePassModalOpen(false)}
-        title="Issue Outward Equipment Gate Pass"
-        size="md"
-      >
-        <form onSubmit={handleCreateGatePass} className="space-y-4">
+      <Modal open={wsModalOpen} onClose={() => setWsModalOpen(false)} title="Log Daily BME Worksheet">
+        <form onSubmit={handleSaveWorksheet} className="space-y-3">
           <div>
-            <Label>Equipment Item to Dispatch *</Label>
-            <Input
-              required
-              value={newGatePassForm.equipmentName}
-              onChange={(e) => setNewGatePassForm({ ...newGatePassForm, equipmentName: e.target.value })}
-              placeholder="e.g. Drager Anesthesia Vaporizer"
-            />
+            <Label>Equipment Name *</Label>
+            <Select value={wsForm.equipmentName} onChange={(e) => setWsForm({ ...wsForm, equipmentName: e.target.value })}>
+              <option value="">-- Select Registered Asset --</option>
+              {equipments.map((eq) => <option key={eq.id} value={eq.name}>{eq.name}</option>)}
+            </Select>
           </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label>Dispatch Purpose</Label>
-              <Select
-                value={newGatePassForm.purpose}
-                onChange={(e) => setNewGatePassForm({ ...newGatePassForm, purpose: e.target.value as any })}
-              >
-                <option value="Repair">Repair / Overhaul</option>
-                <option value="Calibration">NABL Calibration</option>
-                <option value="Transfer">Inter-Branch Transfer</option>
-                <option value="Vendor Demo">Vendor Demo Return</option>
-                <option value="Scrap">Condemned / Scrap</option>
-              </Select>
-            </div>
-            <div>
-              <Label>Expected Return Date</Label>
-              <Input
-                type="date"
-                value={newGatePassForm.expectedReturnDate}
-                onChange={(e) => setNewGatePassForm({ ...newGatePassForm, expectedReturnDate: e.target.value })}
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label>Service Center / Vendor *</Label>
-              <Input
-                required
-                value={newGatePassForm.vendorName}
-                onChange={(e) => setNewGatePassForm({ ...newGatePassForm, vendorName: e.target.value })}
-                placeholder="e.g. Mindray Precision Care"
-              />
-            </div>
-            <div>
-              <Label>Vendor Contact Person / Phone</Label>
-              <Input
-                value={newGatePassForm.contactPerson}
-                onChange={(e) => setNewGatePassForm({ ...newGatePassForm, contactPerson: e.target.value })}
-                placeholder="e.g. Mr. Rajesh (98401 23456)"
-              />
-            </div>
-          </div>
-
+          <div><Label>Checklist Action Taken</Label><Input value={wsForm.actionTaken} onChange={(e) => setWsForm({ ...wsForm, actionTaken: e.target.value })} /></div>
           <div>
-            <Label>Remarks / Fault Description</Label>
-            <Input
-              value={newGatePassForm.remarks}
-              onChange={(e) => setNewGatePassForm({ ...newGatePassForm, remarks: e.target.value })}
-              placeholder="e.g. Flow sensor calibration error during OT run"
-            />
+            <Label>Operational Status</Label>
+            <Select value={wsForm.status} onChange={(e) => setWsForm({ ...wsForm, status: e.target.value })}>
+              <option value="operational">Operational</option><option value="needs_attention">Needs Calibration / Attention</option>
+            </Select>
           </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="secondary" type="button" onClick={() => setWsModalOpen(false)}>Cancel</Button>
+            <Button type="submit" variant="success">Save Worksheet</Button>
+          </div>
+        </form>
+      </Modal>
 
-          <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-200 dark:border-slate-700">
-            <Button variant="secondary" onClick={() => setGatePassModalOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" className="bg-amber-600 hover:bg-amber-700 text-white font-semibold">
-              <LogOut className="w-4 h-4 mr-1.5" />
-              Authorize & Print Gate Pass
-            </Button>
+      <Modal open={gpModalOpen} onClose={() => setGpModalOpen(false)} title="Issue Outward Equipment Gate Pass">
+        <form onSubmit={handleSaveGatePass} className="space-y-3">
+          <div><Label>Equipment Name *</Label><Input value={gpForm.equipmentName} onChange={(e) => setGpForm({ ...gpForm, equipmentName: e.target.value })} required /></div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><Label>Vendor / Service Center *</Label><Input value={gpForm.vendorName} onChange={(e) => setGpForm({ ...gpForm, vendorName: e.target.value })} required /></div>
+            <div><Label>Expected Return</Label><Input type="date" value={gpForm.expectedReturnDate} onChange={(e) => setGpForm({ ...gpForm, expectedReturnDate: e.target.value })} /></div>
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="secondary" type="button" onClick={() => setGpModalOpen(false)}>Cancel</Button>
+            <Button type="submit">Issue Pass</Button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal open={srvModalOpen} onClose={() => setSrvModalOpen(false)} title="Log Equipment Service / PM Record">
+        <form onSubmit={handleSaveServiceLog} className="space-y-3">
+          <div><Label>Equipment Name *</Label><Input value={srvForm.equipmentName} onChange={(e) => setSrvForm({ ...srvForm, equipmentName: e.target.value })} required /></div>
+          <div><Label>Service Description *</Label><Input value={srvForm.description} onChange={(e) => setSrvForm({ ...srvForm, description: e.target.value })} required /></div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><Label>Engineer</Label><Input value={srvForm.engineerName} onChange={(e) => setSrvForm({ ...srvForm, engineerName: e.target.value })} /></div>
+            <div><Label>Cost (INR)</Label><Input type="number" value={srvForm.cost} onChange={(e) => setSrvForm({ ...srvForm, cost: e.target.value })} /></div>
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="secondary" type="button" onClick={() => setSrvModalOpen(false)}>Cancel</Button>
+            <Button type="submit">Log Service</Button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal open={docModalOpen} onClose={() => setDocModalOpen(false)} title="Archive Equipment Calibration / Manual">
+        <form onSubmit={handleUploadDoc} className="space-y-3">
+          <div><Label>Document Title *</Label><Input value={docForm.title} onChange={(e) => setDocForm({ ...docForm, title: e.target.value })} required /></div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><Label>Category</Label><Input value={docForm.category} onChange={(e) => setDocForm({ ...docForm, category: e.target.value })} /></div>
+            <div><Label>File Size / Ref</Label><Input value={docForm.size} onChange={(e) => setDocForm({ ...docForm, size: e.target.value })} /></div>
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="secondary" type="button" onClick={() => setDocModalOpen(false)}>Cancel</Button>
+            <Button type="submit">Save Document</Button>
           </div>
         </form>
       </Modal>
     </div>
   );
 };
-
-export default EquipmentsERP;

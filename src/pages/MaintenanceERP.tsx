@@ -1,455 +1,272 @@
-import React, { useState } from "react";
-import { useStore } from "../store/store";
-import { Card, CardHeader, CardBody, Button, Input, Label, Select, Badge, Modal } from "../components/ui";
-import { fmtDate, flashToast } from "../utils/helpers";
-import type { MaintenanceWorkOrder } from "../store/types";
-import {
-  Wrench,
-  Building2,
-  AlertTriangle,
-  ShieldCheck,
-  CheckCircle,
-  Plus,
-  Clock,
-  Printer,
-  Search,
-  Filter,
-  DollarSign,
-  Activity,
-  HardHat,
-} from "lucide-react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
+import { Card, CardHeader, CardBody, Button, Badge, Modal, Input, Select, Label, EmptyState, Th, Td } from "../components/ui";
+import { fmtCurrency, flashToast, downloadCSV } from "../utils/helpers";
+import { erpGet, erpMutate, useErpRealtime } from "../utils/erpApi";
+import { Wrench, AlertTriangle, ShieldCheck, Building2, Plus, RefreshCw, Download, CheckCircle2 } from "lucide-react";
 
-const INITIAL_WORK_ORDERS: MaintenanceWorkOrder[] = [
-  {
-    id: "WO-01",
-    ticketNumber: "WO-2026-051",
-    area: "Operation Theatre",
-    issue: "OT 2 Laminar airflow HEPA filter differential pressure alarm triggering",
-    priority: "Critical",
-    assignedTo: "M. Balaji (Sr. Bio-Engg)",
-    status: "in_progress",
-    reportedDate: "2026-11-24",
-    cost: 4500,
-  },
-  {
-    id: "WO-02",
-    ticketNumber: "WO-2026-052",
-    area: "HVAC & Generator",
-    issue: "250 kVA Generator diesel transfer pump solenoid valve leak",
-    priority: "High",
-    assignedTo: "K. Saravanan (Electrical)",
-    status: "open",
-    reportedDate: "2026-11-24",
-    cost: 2800,
-  },
-  {
-    id: "WO-03",
-    ticketNumber: "WO-2026-053",
-    area: "Plumbing / RO",
-    issue: "Dialysis Unit pure RO water recirculation pressure drop below 2.5 bar",
-    priority: "Critical",
-    assignedTo: "R. Gopal (Water Systems)",
-    status: "resolved",
-    reportedDate: "2026-11-23",
-    resolvedDate: "2026-11-24",
-    cost: 1500,
-  },
-  {
-    id: "WO-04",
-    ticketNumber: "WO-2026-054",
-    area: "ICU",
-    issue: "Bed 6 Oxygen flowmeter wall outlet quick-connect coupler sticking",
-    priority: "High",
-    assignedTo: "M. Balaji (Sr. Bio-Engg)",
-    status: "closed",
-    reportedDate: "2026-11-22",
-    resolvedDate: "2026-11-23",
-    cost: 800,
-  },
-];
+interface WorkOrder {
+  id: string;
+  ticketNumber: string;
+  area: string;
+  issue: string;
+  priority: string;
+  assignedTo: string;
+  status: string;
+  reportedDate: string;
+  cost?: number;
+}
 
-export const MaintenanceERP: React.FC<{
-  initialAction?: string;
-  dropdownOption?: string;
-}> = ({ initialAction = "work_orders", dropdownOption }) => {
-  const [activeTab, setActiveTab] = useState<string>(initialAction || "work_orders");
-  const [workOrders, setWorkOrders] = useState<MaintenanceWorkOrder[]>(INITIAL_WORK_ORDERS);
-  const [showNewTicketModal, setShowNewTicketModal] = useState(false);
-  const [newTicket, setNewTicket] = useState({
-    area: "Operation Theatre" as MaintenanceWorkOrder["area"],
-    issue: "",
-    priority: "High" as MaintenanceWorkOrder["priority"],
-    assignedTo: "M. Balaji (Sr. Bio-Engg)",
-  });
+interface AmcContract {
+  id: string;
+  system: string;
+  vendor: string;
+  coverage: string;
+  annualFee: number;
+  expiry: string;
+  status: string;
+}
 
-  React.useEffect(() => {
-    if (initialAction) setActiveTab(initialAction);
-  }, [initialAction]);
+const MAINT_TITLES: Record<string, string> = {
+  facility_overview: "Hospital Facility Engineering Overview",
+  work_orders: "Preventive & Corrective Work Orders",
+  breakdown_tickets: "Critical Breakdown Tickets",
+  amc_contracts: "Annual Maintenance Contracts (AMC / CMC)",
+};
 
-  const handleCreateTicket = (e: React.FormEvent) => {
+export const MaintenanceERP: React.FC<{ initialAction?: string; dropdownOption?: string }> = ({
+  initialAction = "work_orders",
+  dropdownOption,
+}) => {
+  const [activeTool, setActiveTool] = useState(initialAction);
+  const [loading, setLoading] = useState(false);
+  const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
+  const [amcContracts, setAmcContracts] = useState<AmcContract[]>([]);
+
+  const [woModalOpen, setWoModalOpen] = useState(false);
+  const [amcModalOpen, setAmcModalOpen] = useState(false);
+
+  const [woForm, setWoForm] = useState({ area: "ICU", issue: "", priority: "High", assignedTo: "M. Balaji (Sr. Bio-Engg)", cost: "1500" });
+  const [amcForm, setAmcForm] = useState({ system: "", vendor: "", coverage: "Comprehensive (CMC)", annualFee: "250000", expiry: "2027-12-31" });
+
+  useEffect(() => {
+    if (initialAction) setActiveTool(initialAction);
+  }, [initialAction, dropdownOption]);
+
+  const loadMaintenance = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await erpGet("/api/maintenance");
+      setWorkOrders(res.workOrders || []);
+      setAmcContracts(res.amcContracts || []);
+    } catch (err: any) {
+      flashToast(err?.message || "Failed loading maintenance module", "warn");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadMaintenance();
+  }, [loadMaintenance]);
+
+  useErpRealtime("maintenance", loadMaintenance);
+
+  const openCount = useMemo(() => workOrders.filter((w) => w.status === "open" || w.status === "in_progress").length, [workOrders]);
+  const criticalCount = useMemo(() => workOrders.filter((w) => w.priority === "Critical" && w.status !== "resolved").length, [workOrders]);
+  const visibleWorkOrders = useMemo(
+    () => (activeTool === "breakdown_tickets" ? workOrders.filter((w) => w.priority === "Critical" || w.priority === "High") : workOrders),
+    [workOrders, activeTool]
+  );
+
+  const handleCreateWorkOrder = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newTicket.issue) return;
-
-    const created: MaintenanceWorkOrder = {
-      id: `WO-${Date.now().toString().slice(-3)}`,
-      ticketNumber: `WO-2026-${(workOrders.length + 55).toString().padStart(3, "0")}`,
-      area: newTicket.area,
-      issue: newTicket.issue,
-      priority: newTicket.priority,
-      assignedTo: newTicket.assignedTo,
-      status: "open",
-      reportedDate: new Date().toISOString().split("T")[0],
-    };
-
-    setWorkOrders([created, ...workOrders]);
-    flashToast(`Work Order #${created.ticketNumber} logged & assigned`, "success");
-    setShowNewTicketModal(false);
-    setNewTicket({
-      area: "Operation Theatre",
-      issue: "",
-      priority: "High",
-      assignedTo: "M. Balaji (Sr. Bio-Engg)",
-    });
+    if (!woForm.issue.trim()) return flashToast("Issue description is required", "warn");
+    try {
+      await erpMutate("/api/maintenance", {
+        action: "workOrder",
+        ...woForm,
+        cost: Number(woForm.cost) || 0,
+        status: "open",
+      });
+      setWoModalOpen(false);
+      setWoForm({ area: "ICU", issue: "", priority: "High", assignedTo: "M. Balaji (Sr. Bio-Engg)", cost: "1500" });
+      await loadMaintenance();
+      flashToast("Maintenance ticket logged", "ok");
+    } catch (err: any) {
+      flashToast(err?.message || "Failed creating ticket", "warn");
+    }
   };
 
-  const handleToggleResolve = (id: string) => {
-    setWorkOrders(
-      workOrders.map((wo) =>
-        wo.id === id
-          ? {
-              ...wo,
-              status: wo.status === "resolved" ? "closed" : "resolved",
-              resolvedDate: new Date().toISOString().split("T")[0],
-            }
-          : wo
-      )
-    );
-    flashToast("Work Order ticket status updated", "success");
+  const handleResolveWorkOrder = async (wo: WorkOrder) => {
+    try {
+      await erpMutate("/api/maintenance", { action: "workOrder", id: wo.id, status: "resolved" }, "PUT");
+      await loadMaintenance();
+      flashToast(`Resolved ${wo.ticketNumber}`, "ok");
+    } catch (err: any) {
+      flashToast(err?.message || "Update failed", "warn");
+    }
+  };
+
+  const handleAddAmc = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!amcForm.system.trim() || !amcForm.vendor.trim()) return flashToast("System and vendor required", "warn");
+    try {
+      await erpMutate("/api/maintenance", {
+        action: "amc",
+        ...amcForm,
+        annualFee: Number(amcForm.annualFee) || 0,
+        status: "Active",
+      });
+      setAmcModalOpen(false);
+      setAmcForm({ system: "", vendor: "", coverage: "Comprehensive (CMC)", annualFee: "250000", expiry: "2027-12-31" });
+      await loadMaintenance();
+      flashToast("AMC contract saved", "ok");
+    } catch (err: any) {
+      flashToast(err?.message || "Failed saving AMC", "warn");
+    }
   };
 
   return (
-    <div className="space-y-4 max-w-7xl mx-auto pb-12">
-      {/* ── Sub-Navigation / Header ── */}
-      <div className="bg-white dark:bg-slate-800 rounded-xl p-3 border border-slate-200 dark:border-slate-700 shadow-sm flex items-center justify-between flex-wrap gap-2">
-        <div className="flex items-center gap-2">
-          <div className="p-2 bg-amber-50 text-amber-600 dark:bg-amber-950 dark:text-amber-300 rounded-lg">
-            <Wrench className="w-5 h-5" />
+    <div className="space-y-5">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Wrench className="w-5 h-5 text-slate-700 dark:text-slate-300" />
+            <h1 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white">{MAINT_TITLES[activeTool] || "Facility Maintenance"}</h1>
+            {loading && <Badge tone="amber">Syncing...</Badge>}
           </div>
-          <div>
-            <h2 className="text-base font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-              Hospital Facility & Biomedical Engineering Maintenance
-              {dropdownOption && <Badge variant="info">{dropdownOption}</Badge>}
-            </h2>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              Work Order Ticketing, Breakdown Prevention, AMC Contracts & Utility Plants
-            </p>
-          </div>
+          <p className="text-xs text-slate-500 mt-0.5">HVAC, medical gas pipelines, backup DG sets & vendor AMC lifecycle</p>
         </div>
-
-        {/* Action pills */}
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <button
-            onClick={() => setActiveTab("facility_overview")}
-            className={`px-2.5 py-1 text-xs rounded-lg font-medium transition ${
-              activeTab === "facility_overview"
-                ? "bg-amber-600 text-white"
-                : "bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200"
-            }`}
-          >
-            Facility Overview
-          </button>
-          <button
-            onClick={() => setActiveTab("work_orders")}
-            className={`px-2.5 py-1 text-xs rounded-lg font-medium transition ${
-              activeTab === "work_orders"
-                ? "bg-amber-600 text-white"
-                : "bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200"
-            }`}
-          >
-            Work Orders
-          </button>
-          <button
-            onClick={() => setActiveTab("breakdown_tickets")}
-            className={`px-2.5 py-1 text-xs rounded-lg font-medium transition ${
-              activeTab === "breakdown_tickets"
-                ? "bg-amber-600 text-white"
-                : "bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200"
-            }`}
-          >
-            Breakdowns
-          </button>
-          <button
-            onClick={() => setActiveTab("amc_contracts")}
-            className={`px-2.5 py-1 text-xs rounded-lg font-medium transition ${
-              activeTab === "amc_contracts"
-                ? "bg-amber-600 text-white"
-                : "bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200"
-            }`}
-          >
-            AMC Contracts
-          </button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="secondary" size="sm" onClick={loadMaintenance}><RefreshCw className="w-4 h-4" /> Refresh</Button>
+          <Button variant="secondary" size="sm" onClick={() => setAmcModalOpen(true)}><ShieldCheck className="w-4 h-4" /> New AMC</Button>
+          <Button variant="primary" size="sm" onClick={() => setWoModalOpen(true)}><Plus className="w-4 h-4" /> New Ticket</Button>
         </div>
       </div>
 
-      {/* ── KPI METRICS ── */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-        <Card className="p-3 border-l-4 border-l-amber-500">
-          <div className="text-xs text-slate-500 uppercase font-semibold">Active Work Orders</div>
-          <div className="text-2xl font-bold text-slate-800 dark:text-slate-100 mt-1">
-            {workOrders.filter((w) => w.status === "open" || w.status === "in_progress").length}
-          </div>
-          <div className="text-xs text-amber-600 mt-1">Pending engineer resolution</div>
+      {/* KPI Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <Card className="p-4 border-l-4 border-l-blue-500">
+          <div className="text-xs font-semibold text-slate-500 uppercase">Total Work Orders</div>
+          <div className="text-2xl font-bold text-slate-900 dark:text-white mt-1">{workOrders.length}</div>
         </Card>
-        <Card className="p-3 border-l-4 border-l-rose-500">
-          <div className="text-xs text-slate-500 uppercase font-semibold">Critical Breakdown Tickets</div>
-          <div className="text-2xl font-bold text-rose-600 mt-1">
-            {workOrders.filter((w) => w.priority === "Critical" && w.status !== "closed").length}
-          </div>
-          <div className="text-xs text-slate-500 mt-1">OT & Dialysis Plant</div>
+        <Card className="p-4 border-l-4 border-l-amber-500">
+          <div className="text-xs font-semibold text-slate-500 uppercase">Open / In Progress</div>
+          <div className="text-2xl font-bold text-amber-600 mt-1">{openCount}</div>
         </Card>
-        <Card className="p-3 border-l-4 border-l-emerald-500">
-          <div className="text-xs text-slate-500 uppercase font-semibold">Resolved This Week</div>
-          <div className="text-2xl font-bold text-emerald-600 mt-1">
-            {workOrders.filter((w) => w.status === "resolved" || w.status === "closed").length}
-          </div>
-          <div className="text-xs text-slate-500 mt-1">Mean Time to Repair: 3.4 hrs</div>
+        <Card className="p-4 border-l-4 border-l-rose-500">
+          <div className="text-xs font-semibold text-slate-500 uppercase">Critical Breakdowns</div>
+          <div className="text-2xl font-bold text-rose-600 mt-1">{criticalCount}</div>
         </Card>
-        <Card className="p-3 border-l-4 border-l-sky-500">
-          <div className="text-xs text-slate-500 uppercase font-semibold">Active AMC Warranties</div>
-          <div className="text-2xl font-bold text-sky-600 mt-1">8 Systems</div>
-          <div className="text-xs text-slate-500 mt-1">Siemens, Philips & Cummins</div>
+        <Card className="p-4 border-l-4 border-l-emerald-500">
+          <div className="text-xs font-semibold text-slate-500 uppercase">Active AMCs</div>
+          <div className="text-2xl font-bold text-emerald-600 mt-1">{amcContracts.length}</div>
         </Card>
       </div>
 
-      {/* ── 1. WORK ORDERS & BREAKDOWN TICKETS ── */}
-      {(activeTab === "work_orders" || activeTab === "breakdown_tickets") && (
+      {activeTool === "amc_contracts" ? (
         <Card>
-          <CardHeader className="py-3 flex justify-between items-center">
-            <div>
-              <h3 className="font-semibold text-slate-800 dark:text-slate-100 text-xs flex items-center gap-1.5">
-                <Wrench className="w-3.5 h-3.5 text-amber-600" />
-                Work Order & Breakdown Management Console
-              </h3>
-            </div>
-            <Button size="sm" onClick={() => setShowNewTicketModal(true)} className="text-xs bg-amber-600 hover:bg-amber-700 text-white flex items-center gap-1">
-              <Plus className="w-3.5 h-3.5" /> Log Work Order
-            </Button>
-          </CardHeader>
-          <CardBody className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="bg-slate-50 dark:bg-slate-900 border-y border-slate-200 dark:border-slate-700 text-slate-500 uppercase font-semibold">
-                    <th className="p-3">Ticket No.</th>
-                    <th className="p-3">Location / Area</th>
-                    <th className="p-3">Issue Description</th>
-                    <th className="p-3">Priority</th>
-                    <th className="p-3">Assigned Technician</th>
-                    <th className="p-3">Reported</th>
-                    <th className="p-3">Status</th>
-                    <th className="p-3 text-right">Action</th>
+          <CardHeader
+            title="Active AMC & CMC Contracts"
+            right={<Button size="sm" variant="secondary" onClick={() => downloadCSV("amc_contracts.csv", amcContracts as any[])}><Download className="w-3.5 h-3.5" /> CSV</Button>}
+          />
+          <CardBody className="p-0 overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead><tr><Th>System / Equipment</Th><Th>Vendor</Th><Th>Coverage</Th><Th>Expiry</Th><Th className="text-right">Annual Fee</Th><Th>Status</Th></tr></thead>
+              <tbody>
+                {amcContracts.map((a) => (
+                  <tr key={a.id} className="border-t border-slate-100 dark:border-slate-800">
+                    <Td className="font-semibold"><Building2 className="w-3.5 h-3.5 inline mr-1.5 text-blue-600" />{a.system}</Td>
+                    <Td>{a.vendor}</Td><Td>{a.coverage}</Td><Td>{a.expiry}</Td>
+                    <Td className="text-right font-bold">{fmtCurrency(a.annualFee)}</Td>
+                    <Td><Badge tone="green">{a.status}</Badge></Td>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {workOrders.map((wo) => (
-                    <tr key={wo.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                      <td className="p-3 font-mono font-bold text-slate-800 dark:text-slate-100">{wo.ticketNumber}</td>
-                      <td className="p-3 font-medium text-slate-800 dark:text-slate-200">{wo.area}</td>
-                      <td className="p-3 text-slate-600 dark:text-slate-300 max-w-xs">{wo.issue}</td>
-                      <td className="p-3">
-                        <Badge
-                          variant={wo.priority === "Critical" ? "danger" : wo.priority === "High" ? "warning" : "default"}
-                          className="text-[10px]"
-                        >
-                          {wo.priority}
-                        </Badge>
-                      </td>
-                      <td className="p-3 text-slate-600 dark:text-slate-400">{wo.assignedTo}</td>
-                      <td className="p-3 text-slate-500 font-mono">{wo.reportedDate}</td>
-                      <td className="p-3">
-                        <Badge
-                          variant={wo.status === "closed" ? "success" : wo.status === "resolved" ? "info" : "warning"}
-                          className="text-[10px]"
-                        >
-                          {wo.status.replace("_", " ")}
-                        </Badge>
-                      </td>
-                      <td className="p-3 text-right">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleToggleResolve(wo.id)}
-                          className="text-[11px] py-1 px-2"
-                        >
-                          {wo.status === "resolved" ? "Close" : "Resolve"}
-                        </Button>
-                      </td>
+                ))}
+              </tbody>
+            </table>
+          </CardBody>
+        </Card>
+      ) : (
+        <Card>
+          <CardHeader
+            title={activeTool === "breakdown_tickets" ? "High & Critical Breakdown Tickets" : "Facility Engineering Work Orders"}
+            right={<Button size="sm" variant="secondary" onClick={() => downloadCSV("work_orders.csv", visibleWorkOrders as any[])}><Download className="w-3.5 h-3.5" /> CSV</Button>}
+          />
+          <CardBody className="p-0 overflow-x-auto">
+            {visibleWorkOrders.length === 0 ? (
+              <EmptyState icon="🔧" title="All facility systems nominal" sub="No open breakdown or work orders." />
+            ) : (
+              <table className="w-full text-sm">
+                <thead><tr><Th>Ticket #</Th><Th>Hospital Area</Th><Th>Issue</Th><Th>Priority</Th><Th>Assigned To</Th><Th>Status</Th><Th className="text-right">Action</Th></tr></thead>
+                <tbody>
+                  {visibleWorkOrders.map((wo) => (
+                    <tr key={wo.id} className="border-t border-slate-100 dark:border-slate-800">
+                      <Td className="font-mono text-xs">{wo.ticketNumber}</Td>
+                      <Td className="font-medium">{wo.area}</Td>
+                      <Td>{wo.issue}</Td>
+                      <Td><Badge tone={wo.priority === "Critical" ? "red" : wo.priority === "High" ? "amber" : "blue"}>{wo.priority}</Badge></Td>
+                      <Td>{wo.assignedTo}</Td>
+                      <Td><Badge tone={wo.status === "resolved" ? "green" : "amber"}>{wo.status.replace("_", " ")}</Badge></Td>
+                      <Td className="text-right">
+                        {wo.status !== "resolved" && (
+                          <Button size="sm" variant="success" onClick={() => handleResolveWorkOrder(wo)}><CheckCircle2 className="w-3.5 h-3.5" /> Resolve</Button>
+                        )}
+                      </Td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-            </div>
+            )}
           </CardBody>
         </Card>
       )}
 
-      {/* ── 2. FACILITY OVERVIEW ── */}
-      {activeTab === "facility_overview" && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-          <Card className="p-4 space-y-3">
-            <h4 className="font-bold text-slate-800 dark:text-slate-100 text-sm flex items-center gap-2">
-              <Building2 className="w-4 h-4 text-sky-600" /> Plant & Energy Systems Status
-            </h4>
-            <div className="space-y-2">
-              <div className="p-2 rounded bg-slate-50 dark:bg-slate-900 border flex justify-between items-center">
-                <span>Central HVAC Chiller Plant:</span>
-                <span className="font-bold text-emerald-600">Running (7.2°C Supply)</span>
-              </div>
-              <div className="p-2 rounded bg-slate-50 dark:bg-slate-900 border flex justify-between items-center">
-                <span>Medical Gas Pipeline (MGPS O2):</span>
-                <span className="font-bold text-emerald-600">4.1 Bar (Pressure Stable)</span>
-              </div>
-              <div className="p-2 rounded bg-slate-50 dark:bg-slate-900 border flex justify-between items-center">
-                <span>RO Dialysis Filtration Plant:</span>
-                <span className="font-bold text-emerald-600">18 ppm TDS (Optimal)</span>
-              </div>
-              <div className="p-2 rounded bg-slate-50 dark:bg-slate-900 border flex justify-between items-center">
-                <span>Solar Rooftop Array (50 kWp):</span>
-                <span className="font-bold text-emerald-600">Generating 38.4 kW</span>
-              </div>
-            </div>
-          </Card>
-
-          <Card className="p-4 space-y-3">
-            <h4 className="font-bold text-slate-800 dark:text-slate-100 text-sm flex items-center gap-2">
-              <ShieldCheck className="w-4 h-4 text-emerald-600" /> Life Safety & Fire Suppression
-            </h4>
-            <div className="space-y-2">
-              <div className="p-2 rounded bg-slate-50 dark:bg-slate-900 border flex justify-between items-center">
-                <span>Fire Jockey Pump Pressure:</span>
-                <span className="font-bold text-emerald-600">7.5 kg/cm2 (Active Standby)</span>
-              </div>
-              <div className="p-2 rounded bg-slate-50 dark:bg-slate-900 border flex justify-between items-center">
-                <span>Smoke Detectors (Addressable):</span>
-                <span className="font-bold text-slate-700 dark:text-slate-300">184 / 184 Healthy</span>
-              </div>
-              <div className="p-2 rounded bg-slate-50 dark:bg-slate-900 border flex justify-between items-center">
-                <span>Fire NOC Certificate Validity:</span>
-                <span className="font-bold text-emerald-600">Valid until Dec 2027</span>
-              </div>
-            </div>
-          </Card>
-        </div>
-      )}
-
-      {/* ── 3. AMC CONTRACTS ── */}
-      {activeTab === "amc_contracts" && (
-        <Card>
-          <CardHeader className="py-3">
-            <h3 className="font-semibold text-slate-800 dark:text-slate-100 text-xs flex items-center gap-1.5">
-              <ShieldCheck className="w-3.5 h-3.5 text-sky-600" />
-              Annual Maintenance Contracts (AMC / CMC) Register
-            </h3>
-          </CardHeader>
-          <CardBody className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="bg-slate-50 dark:bg-slate-900 border-y border-slate-200 dark:border-slate-700 text-slate-500 uppercase font-semibold">
-                    <th className="p-3">Equipment / System</th>
-                    <th className="p-3">Contractor / Vendor</th>
-                    <th className="p-3">Coverage Type</th>
-                    <th className="p-3">Annual Fee</th>
-                    <th className="p-3">Expiry Date</th>
-                    <th className="p-3">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {[
-                    { sys: "Siemens Magnetom 1.5T MRI", vendor: "Siemens Healthcare India", type: "Comprehensive (CMC)", fee: "₹12,50,000", expiry: "2027-03-31", status: "Active" },
-                    { sys: "GE Healthcare Optima CT660", vendor: "GE Medical Systems", type: "Comprehensive (CMC)", fee: "₹9,80,000", expiry: "2027-06-30", status: "Active" },
-                    { sys: "Cummins 250 kVA Diesel Genset", vendor: "Cummins India Service", type: "Labor & PM (AMC)", fee: "₹95,000", expiry: "2026-12-31", status: "Renewing Soon" },
-                    { sys: "OT Laminar Flow & Chiller AHU", vendor: "Voltas Commercial Aircon", type: "Quarterly PM (AMC)", fee: "₹1,80,000", expiry: "2027-08-31", status: "Active" },
-                  ].map((item, idx) => (
-                    <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                      <td className="p-3 font-bold text-slate-800 dark:text-slate-100">{item.sys}</td>
-                      <td className="p-3 text-slate-700 dark:text-slate-300">{item.vendor}</td>
-                      <td className="p-3 font-medium text-sky-600 dark:text-sky-400">{item.type}</td>
-                      <td className="p-3 font-mono font-bold text-slate-800 dark:text-slate-200">{item.fee}</td>
-                      <td className="p-3 font-mono text-slate-500">{item.expiry}</td>
-                      <td className="p-3">
-                        <Badge variant={item.status === "Active" ? "success" : "warning"} className="text-[10px]">
-                          {item.status}
-                        </Badge>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </CardBody>
-        </Card>
-      )}
-
-      {/* ── MODAL: LOG WORK ORDER ── */}
-      {showNewTicketModal && (
-        <Modal open={showNewTicketModal} onClose={() => setShowNewTicketModal(false)} title="Log Facility / Biomedical Maintenance Work Order">
-          <form onSubmit={handleCreateTicket} className="space-y-3 text-xs">
+      {/* Work Order Modal */}
+      <Modal open={woModalOpen} onClose={() => setWoModalOpen(false)} title="Log Maintenance Work Order">
+        <form onSubmit={handleCreateWorkOrder} className="space-y-3">
+          <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label>Location / Department</Label>
-              <Select
-                value={newTicket.area}
-                onChange={(e) => setNewTicket({ ...newTicket, area: e.target.value as any })}
-              >
-                <option value="Operation Theatre">Operation Theatre</option>
-                <option value="ICU">Intensive Care Unit (ICU)</option>
-                <option value="Wards">Inpatient Wards</option>
-                <option value="Radiology">Radiology & Imaging</option>
-                <option value="Pharmacy">Pharmacy</option>
-                <option value="HVAC & Generator">HVAC & Generator</option>
-                <option value="Plumbing / RO">Plumbing / RO Plant</option>
+              <Label>Facility Area</Label>
+              <Select value={woForm.area} onChange={(e) => setWoForm({ ...woForm, area: e.target.value })}>
+                <option value="ICU">ICU</option><option value="Operation Theatre">Operation Theatre</option>
+                <option value="HVAC & Generator">HVAC & Generator</option><option value="Wards">Wards</option><option value="Radiology">Radiology</option>
               </Select>
             </div>
             <div>
-              <Label>Issue Breakdown Description</Label>
-              <Input
-                placeholder="Describe fault, symptoms, warning codes"
-                value={newTicket.issue}
-                onChange={(e) => setNewTicket({ ...newTicket, issue: e.target.value })}
-                required
-              />
+              <Label>Priority</Label>
+              <Select value={woForm.priority} onChange={(e) => setWoForm({ ...woForm, priority: e.target.value })}>
+                <option value="Critical">Critical</option><option value="High">High</option><option value="Medium">Medium</option><option value="Routine">Routine</option>
+              </Select>
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <Label>Priority Level</Label>
-                <Select
-                  value={newTicket.priority}
-                  onChange={(e) => setNewTicket({ ...newTicket, priority: e.target.value as any })}
-                >
-                  <option value="Critical">🚨 Critical (Safety Risk / Bed Block)</option>
-                  <option value="High">High (Immediate Repair)</option>
-                  <option value="Medium">Medium (Routine)</option>
-                  <option value="Routine">Routine Scheduled Maintenance</option>
-                </Select>
-              </div>
-              <div>
-                <Label>Assigned Engineer</Label>
-                <Input
-                  value={newTicket.assignedTo}
-                  onChange={(e) => setNewTicket({ ...newTicket, assignedTo: e.target.value })}
-                  required
-                />
-              </div>
-            </div>
-            <div className="flex justify-end gap-2 pt-2 border-t">
-              <Button type="button" variant="outline" onClick={() => setShowNewTicketModal(false)}>Cancel</Button>
-              <Button type="submit" className="bg-amber-600 hover:bg-amber-700 text-white">Create Ticket</Button>
-            </div>
-          </form>
-        </Modal>
-      )}
+          </div>
+          <div><Label>Issue Summary *</Label><Input value={woForm.issue} onChange={(e) => setWoForm({ ...woForm, issue: e.target.value })} required /></div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><Label>Assigned Engineer</Label><Input value={woForm.assignedTo} onChange={(e) => setWoForm({ ...woForm, assignedTo: e.target.value })} /></div>
+            <div><Label>Est. Cost (INR)</Label><Input type="number" value={woForm.cost} onChange={(e) => setWoForm({ ...woForm, cost: e.target.value })} /></div>
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="secondary" type="button" onClick={() => setWoModalOpen(false)}>Cancel</Button>
+            <Button type="submit"><AlertTriangle className="w-3.5 h-3.5" /> Create Ticket</Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* AMC Modal */}
+      <Modal open={amcModalOpen} onClose={() => setAmcModalOpen(false)} title="Add AMC / CMC Service Contract">
+        <form onSubmit={handleAddAmc} className="space-y-3">
+          <div><Label>System / Asset *</Label><Input value={amcForm.system} onChange={(e) => setAmcForm({ ...amcForm, system: e.target.value })} required /></div>
+          <div><Label>Vendor *</Label><Input value={amcForm.vendor} onChange={(e) => setAmcForm({ ...amcForm, vendor: e.target.value })} required /></div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><Label>Annual Fee (INR)</Label><Input type="number" value={amcForm.annualFee} onChange={(e) => setAmcForm({ ...amcForm, annualFee: e.target.value })} /></div>
+            <div><Label>Expiry Date</Label><Input type="date" value={amcForm.expiry} onChange={(e) => setAmcForm({ ...amcForm, expiry: e.target.value })} /></div>
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="secondary" type="button" onClick={() => setAmcModalOpen(false)}>Cancel</Button>
+            <Button type="submit">Save AMC</Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 };
-
-export default MaintenanceERP;

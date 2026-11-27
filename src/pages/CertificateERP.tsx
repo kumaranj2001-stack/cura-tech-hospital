@@ -1,694 +1,305 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useStore } from "../store/store";
-import { Card, CardHeader, CardBody, Button, Input, Label, Select, Badge, Modal } from "../components/ui";
-import { fmtDate, fmtDateTime, flashToast } from "../utils/helpers";
-import type { HospitalCertificate, CertificateType } from "../store/types";
-import {
-  Award,
-  Baby,
-  Syringe,
-  FileCheck,
-  FileMinus,
-  FileText,
-  Navigation,
-  CheckSquare,
-  ShieldAlert,
-  ListOrdered,
-  Printer,
-  Search,
-  Plus,
-  QrCode,
-  CheckCircle2,
-} from "lucide-react";
+import { Card, CardHeader, CardBody, Button, Badge, Modal, Input, Select, Label, EmptyState, Th, Td, Textarea } from "../components/ui";
+import { flashToast, downloadCSV, today } from "../utils/helpers";
+import { erpGet, erpMutate, useErpRealtime } from "../utils/erpApi";
+import { Award, Plus, Printer, RefreshCw, Download, QrCode } from "lucide-react";
 
-export const CertificateERP: React.FC<{
-  initialAction?: string;
-  subTypeOption?: string;
-}> = ({ initialAction, subTypeOption }) => {
-  const { data, currentUser, currentBranch, log } = useStore();
-  const branchId = currentBranch?.id || currentUser?.branchId || "br_main";
+interface MedicalCert {
+  id: string;
+  certificateType: string;
+  certificateNumber: string;
+  patientName: string;
+  patientUhid?: string;
+  patientAge?: number;
+  patientGender?: string;
+  doctorName: string;
+  issueDate: string;
+  validUntil?: string;
+  purpose?: string;
+  diagnosis?: string;
+  details?: Record<string, any>;
+  status: string;
+}
 
-  const [activeSubTab, setActiveSubTab] = useState<CertificateType | "report">(
-    initialAction === "birth_cert"
-      ? "birth"
-      : initialAction === "vaccination_cert"
-      ? "vaccination"
-      : initialAction === "medical_cert"
-      ? "medical"
-      : initialAction === "fitness_cert"
-      ? "fitness"
-      : initialAction === "death_cert"
-      ? "death"
-      : initialAction === "self_declaration"
-      ? "self_declaration"
-      : initialAction === "marine_cert"
-      ? "marine"
-      : initialAction === "consent_form"
-      ? "consent"
-      : initialAction === "surgical_consent"
-      ? "surgical_consent"
-      : initialAction === "cert_report"
-      ? "report"
-      : "medical"
-  );
+const ACTION_TO_CERT: Record<string, string> = {
+  birth_cert: "birth",
+  vaccination_cert: "vaccination",
+  medical_cert: "medical",
+  fitness_cert: "fitness",
+  death_cert: "death",
+  self_declaration: "self_declaration",
+  marine_cert: "marine",
+  consent_form: "consent",
+  surgical_consent: "surgical_consent",
+  cert_report: "registry",
+};
 
-  const [searchQuery, setSearchQuery] = useState("");
-  const [printModalOpen, setPrintModalOpen] = useState(false);
-  const [selectedCertForPrint, setSelectedCertForPrint] = useState<HospitalCertificate | null>(null);
+const CERT_LABELS: Record<string, string> = {
+  birth: "Birth Certificate",
+  vaccination: "Vaccination Certificate",
+  medical: "Medical Leave Certificate",
+  fitness: "Physical Fitness Certificate",
+  death: "Death Certificate",
+  self_declaration: "Patient Self Declaration",
+  marine: "Marine / Seafarer Medical Certificate",
+  consent: "General Treatment Consent Form",
+  surgical_consent: "Surgical & Anesthesia Consent Form",
+  registry: "Issued Certificates Registry",
+};
 
-  // In-memory list of certificates seeded with realistic records
-  const [certificates, setCertificates] = useState<HospitalCertificate[]>([
-    {
-      id: "cert_1",
-      branchId,
-      certificateType: "birth",
-      certificateNumber: "BC-2026-0041",
-      patientId: "p_101",
-      patientName: "Baby of Meenakshi",
-      patientUhid: "CURA-2026-104",
-      patientAge: 0,
-      patientGender: "Female",
-      doctorName: "Dr. Lakshmi Venkatesh",
-      issueDate: "2026-11-20",
-      purpose: "Official Birth Registration",
-      details: {
-        timeOfBirth: "04:22 AM",
-        motherName: "Meenakshi Sundaram",
-        fatherName: "Sundaram Ramanathan",
-        birthWeightKg: 3.2,
-        deliveryType: "Normal Vaginal Delivery",
-        apgarScore: "9/10",
-      },
-      status: "issued",
-      createdAt: new Date().toISOString(),
-    },
-    {
-      id: "cert_2",
-      branchId,
-      certificateType: "medical",
-      certificateNumber: "MC-2026-0182",
-      patientId: "p_102",
-      patientName: "Rajesh Kannan",
-      patientUhid: "CURA-2026-089",
-      patientAge: 34,
-      patientGender: "Male",
-      doctorName: "Dr. Arvind Sharma",
-      issueDate: "2026-11-22",
-      validUntil: "2026-11-29",
-      purpose: "Medical Leave Recommendation",
-      diagnosis: "Acute Bronchitis with High Grade Fever",
-      details: {
-        restDaysRecommended: 7,
-        treatmentAdvised: "Antibiotics, Steam Inhalation, Strict Bed Rest",
-        reviewDate: "2026-11-29",
-      },
-      status: "issued",
-      createdAt: new Date().toISOString(),
-    },
-    {
-      id: "cert_3",
-      branchId,
-      certificateType: "fitness",
-      certificateNumber: "FC-2026-0094",
-      patientId: "p_103",
-      patientName: "Deepa Ramachandran",
-      patientUhid: "CURA-2026-061",
-      patientAge: 27,
-      patientGender: "Female",
-      doctorName: "Dr. Arvind Sharma",
-      issueDate: "2026-11-23",
-      purpose: "Pre-Employment Physical Fitness",
-      details: {
-        bloodPressure: "118/76 mmHg",
-        visionLeft: "6/6",
-        visionRight: "6/6",
-        chestXray: "Normal Bronchovascular Markings",
-        fitnessStatement: "Fit for active commercial corporate duties",
-      },
-      status: "issued",
-      createdAt: new Date().toISOString(),
-    },
-    {
-      id: "cert_4",
-      branchId,
-      certificateType: "marine",
-      certificateNumber: "MAR-2026-0028",
-      patientId: "p_104",
-      patientName: "Capt. Vivek Nair",
-      patientUhid: "CURA-2026-112",
-      patientAge: 46,
-      patientGender: "Male",
-      doctorName: "Dr. Kumaran",
-      issueDate: "2026-11-21",
-      validUntil: "2028-11-20",
-      purpose: subTypeOption || "ILO Maritime Seafarer Medical Fitness",
-      details: {
-        cdcNumber: "IND-CDC-98214",
-        rank: "Master Mariner / Deck Officer",
-        colorVision: "Ishihara 24 Plates - Normal",
-        audiometry: "Bilateral Hearing within normal limits (20dB)",
-        fitForLookout: "YES",
-      },
-      status: "issued",
-      createdAt: new Date().toISOString(),
-    },
-  ]);
+export const CertificateERP: React.FC<{ initialAction?: string; subTypeOption?: string }> = ({
+  initialAction = "birth_cert",
+  subTypeOption,
+}) => {
+  const { currentBranch, viewBranchId, log } = useStore();
+  const currentBranchId = viewBranchId || currentBranch?.id || "br_main";
+  const [certMode, setCertMode] = useState<string>(ACTION_TO_CERT[initialAction] || "birth");
+  const [certs, setCerts] = useState<MedicalCert[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [previewCert, setPreviewCert] = useState<MedicalCert | null>(null);
 
-  // Form State for Issuing Certificate
   const [form, setForm] = useState({
     patientName: "",
     patientUhid: "",
     patientAge: "30",
-    patientGender: "Male" as "Male" | "Female" | "Other",
-    doctorName: data.doctors[0]?.name || "Dr. Arvind Sharma",
+    patientGender: "Male",
+    doctorName: "Dr. Arvind Sharma",
+    issueDate: today(),
+    validUntil: "",
     purpose: "",
     diagnosis: "",
-    restDays: "5",
-    weight: "3.1",
-    parentName: "",
-    secondaryDetails: "",
+    // Type-specific fields
+    motherName: "",
+    fatherName: "",
+    birthWeightKg: "3.1",
+    vaccineName: "COVID-19 / Influenza Quadrivalent",
+    doseLot: "VAC-9921",
+    causeOfDeath: "",
+    procedureName: "",
+    declarationText: "I hereby declare all disclosed medical history and allergies are accurate.",
   });
 
-  const handleIssueCertificate = (e: React.FormEvent) => {
+  useEffect(() => {
+    setCertMode(ACTION_TO_CERT[initialAction] || "birth");
+  }, [initialAction, subTypeOption]);
+
+  const loadCerts = useCallback(async () => {
+    setLoading(true);
+    try {
+      const q = currentBranchId && currentBranchId !== "all" ? `?branchId=${encodeURIComponent(currentBranchId)}` : "";
+      const res = await erpGet(`/api/certificates${q}`);
+      setCerts(res.certificates || []);
+    } catch (err: any) {
+      flashToast(err?.message || "Failed loading certificates", "warn");
+    } finally {
+      setLoading(false);
+    }
+  }, [currentBranchId]);
+
+  useEffect(() => {
+    loadCerts();
+  }, [loadCerts]);
+
+  useErpRealtime("certificate", loadCerts);
+
+  const handleIssueCertificate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.patientName.trim()) {
-      flashToast("Please provide patient name", "warn");
-      return;
+    if (!form.patientName.trim()) return flashToast("Patient name is required", "warn");
+
+    const prefix = certMode.slice(0, 2).toUpperCase();
+    const certificateNumber = `${prefix}-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+    const details: Record<string, any> = {};
+
+    if (certMode === "birth") {
+      Object.assign(details, { motherName: form.motherName, fatherName: form.fatherName, birthWeightKg: Number(form.birthWeightKg) || 3.0 });
+    } else if (certMode === "vaccination") {
+      Object.assign(details, { vaccineName: form.vaccineName, batchLot: form.doseLot });
+    } else if (certMode === "death") {
+      Object.assign(details, { causeOfDeath: form.causeOfDeath });
+    } else if (certMode === "surgical_consent" || certMode === "consent") {
+      Object.assign(details, { procedureName: form.procedureName });
+    } else if (certMode === "marine") {
+      Object.assign(details, { maritimeStandard: subTypeOption || "ILO / STCW Seafarer Standard" });
+    } else if (certMode === "self_declaration") {
+      Object.assign(details, { declarationText: form.declarationText });
     }
 
-    const typePrefixMap: Record<CertificateType, string> = {
-      birth: "BC",
-      vaccination: "VC",
-      medical: "MC",
-      fitness: "FC",
-      death: "DC",
-      self_declaration: "SD",
-      marine: "MAR",
-      consent: "CF",
-      surgical_consent: "SCF",
-    };
-
-    const prefix = typePrefixMap[activeSubTab as CertificateType] || "CERT";
-    const certNumber = `${prefix}-2026-${Math.floor(1000 + Math.random() * 9000)}`;
-
-    const newCert: HospitalCertificate = {
-      id: "cert_" + Date.now(),
-      branchId,
-      certificateType: activeSubTab as CertificateType,
-      certificateNumber: certNumber,
-      patientId: "p_" + Date.now(),
-      patientName: form.patientName.trim(),
-      patientUhid: form.patientUhid.trim() || `CURA-2026-${Math.floor(100 + Math.random() * 900)}`,
-      patientAge: Number(form.patientAge) || 30,
-      patientGender: form.patientGender,
-      doctorName: form.doctorName,
-      issueDate: new Date().toISOString().slice(0, 10),
-      purpose: form.purpose.trim() || `${activeSubTab.toUpperCase()} Certificate`,
-      diagnosis: form.diagnosis.trim(),
-      details: {
-        restDaysRecommended: form.restDays,
-        birthWeightKg: form.weight,
-        parentName: form.parentName,
-        secondaryDetails: form.secondaryDetails,
-      },
-      status: "issued",
-      createdAt: new Date().toISOString(),
-    };
-
-    setCertificates([newCert, ...certificates]);
-    log("CERTIFICATE_ISSUED", `Issued ${certNumber} for ${newCert.patientName}`);
-    flashToast(`Certificate ${certNumber} issued successfully!`);
-
-    setSelectedCertForPrint(newCert);
-    setPrintModalOpen(true);
+    try {
+      const res = await erpMutate("/api/certificates", {
+        branchId: currentBranchId === "all" ? "br_main" : currentBranchId,
+        certificateType: certMode,
+        certificateNumber,
+        patientName: form.patientName.trim(),
+        patientUhid: form.patientUhid.trim() || undefined,
+        patientAge: Number(form.patientAge) || 0,
+        patientGender: form.patientGender,
+        doctorName: form.doctorName,
+        issueDate: form.issueDate,
+        validUntil: form.validUntil || undefined,
+        purpose: form.purpose || CERT_LABELS[certMode],
+        diagnosis: form.diagnosis || undefined,
+        details,
+        status: "issued",
+      });
+      log("CERTIFICATE_ISSUED", `Issued ${certificateNumber} (${certMode}) for ${form.patientName}`);
+      await loadCerts();
+      if (res.certificate) setPreviewCert(res.certificate);
+      flashToast(`Issued official certificate ${certificateNumber}`, "ok");
+    } catch (err: any) {
+      flashToast(err?.message || "Failed issuing certificate", "warn");
+    }
   };
 
-  const filteredCerts = certificates.filter((c) => {
-    const q = searchQuery.toLowerCase().trim();
-    if (!q) return true;
-    return (
-      c.patientName.toLowerCase().includes(q) ||
-      c.certificateNumber.toLowerCase().includes(q) ||
-      (c.patientUhid && c.patientUhid.toLowerCase().includes(q)) ||
-      c.certificateType.toLowerCase().includes(q)
-    );
-  });
-
   return (
-    <div className="space-y-6">
-      {/* Module Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-gradient-to-r from-amber-600 via-amber-700 to-indigo-800 text-white p-6 rounded-2xl shadow-lg">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <span className="bg-amber-500/30 text-amber-100 text-xs font-semibold px-2.5 py-0.5 rounded-full border border-amber-400/40">
-              Medical Certification Module
-            </span>
-            <span className="text-xs text-amber-200">Legal, Clinical & Statutory Declarations</span>
+    <div className="space-y-5">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Award className="w-5 h-5 text-amber-600" />
+            <h1 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white">{CERT_LABELS[certMode] || "Medical Certificates"}</h1>
+            {subTypeOption && <Badge tone="blue">{subTypeOption}</Badge>}
+            {loading && <Badge tone="amber">Syncing...</Badge>}
           </div>
-          <h1 className="text-2xl font-bold tracking-tight">Hospital Certificates & Consents</h1>
-          <p className="text-amber-100/80 text-sm max-w-xl">
-            Issue and verify authentic hospital certificates (Birth, Vaccination, Medical, Fitness, Death, Maritime, and Surgical Consents) with official digital QR authentication.
-          </p>
+          <p className="text-xs text-slate-500 mt-0.5">Digitally signed medical, vital, marine & consent documentation</p>
         </div>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="secondary" size="sm" onClick={loadCerts}><RefreshCw className="w-4 h-4" /> Refresh</Button>
+          <Button variant="secondary" size="sm" onClick={() => setCertMode("registry")}>Registry ({certs.length})</Button>
+        </div>
+      </div>
 
-        <div className="flex items-center gap-2.5">
-          <Button
-            variant="secondary"
-            className="bg-white/10 hover:bg-white/20 text-white border-white/20"
-            onClick={() => setActiveSubTab("report")}
-          >
-            <ListOrdered className="w-4 h-4 mr-1.5" />
-            Certificate Report ({certificates.length})
+      {/* Quick Type Switcher */}
+      <div className="flex flex-wrap gap-1.5">
+        {Object.entries(CERT_LABELS).map(([key, label]) => (
+          <Button key={key} size="sm" variant={certMode === key ? "primary" : "secondary"} onClick={() => setCertMode(key)}>
+            {label}
           </Button>
-        </div>
+        ))}
       </div>
 
-      {/* Certificate Sub-Navigation Tabs */}
-      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 bg-slate-100 dark:bg-slate-800 p-1.5 rounded-xl text-xs">
-        <button
-          onClick={() => setActiveSubTab("birth")}
-          className={`flex items-center gap-1 px-3 py-1.5 rounded-lg font-semibold transition whitespace-nowrap ${
-            activeSubTab === "birth"
-              ? "bg-white dark:bg-slate-700 text-sky-600 dark:text-sky-300 shadow-xs"
-              : "text-slate-600 dark:text-slate-400 hover:text-slate-900"
-          }`}
-        >
-          <Baby className="w-3.5 h-3.5" />
-          Birth Certificate
-        </button>
-        <button
-          onClick={() => setActiveSubTab("vaccination")}
-          className={`flex items-center gap-1 px-3 py-1.5 rounded-lg font-semibold transition whitespace-nowrap ${
-            activeSubTab === "vaccination"
-              ? "bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-300 shadow-xs"
-              : "text-slate-600 dark:text-slate-400 hover:text-slate-900"
-          }`}
-        >
-          <Syringe className="w-3.5 h-3.5" />
-          Vaccination
-        </button>
-        <button
-          onClick={() => setActiveSubTab("medical")}
-          className={`flex items-center gap-1 px-3 py-1.5 rounded-lg font-semibold transition whitespace-nowrap ${
-            activeSubTab === "medical"
-              ? "bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-300 shadow-xs"
-              : "text-slate-600 dark:text-slate-400 hover:text-slate-900"
-          }`}
-        >
-          <FileCheck className="w-3.5 h-3.5" />
-          Medical Certificate
-        </button>
-        <button
-          onClick={() => setActiveSubTab("fitness")}
-          className={`flex items-center gap-1 px-3 py-1.5 rounded-lg font-semibold transition whitespace-nowrap ${
-            activeSubTab === "fitness"
-              ? "bg-white dark:bg-slate-700 text-purple-600 dark:text-purple-300 shadow-xs"
-              : "text-slate-600 dark:text-slate-400 hover:text-slate-900"
-          }`}
-        >
-          <Award className="w-3.5 h-3.5" />
-          Fitness Certificate
-        </button>
-        <button
-          onClick={() => setActiveSubTab("death")}
-          className={`flex items-center gap-1 px-3 py-1.5 rounded-lg font-semibold transition whitespace-nowrap ${
-            activeSubTab === "death"
-              ? "bg-white dark:bg-slate-700 text-rose-600 dark:text-rose-300 shadow-xs"
-              : "text-slate-600 dark:text-slate-400 hover:text-slate-900"
-          }`}
-        >
-          <FileMinus className="w-3.5 h-3.5" />
-          Death Certificate
-        </button>
-        <button
-          onClick={() => setActiveSubTab("marine")}
-          className={`flex items-center gap-1 px-3 py-1.5 rounded-lg font-semibold transition whitespace-nowrap ${
-            activeSubTab === "marine"
-              ? "bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 shadow-xs"
-              : "text-slate-600 dark:text-slate-400 hover:text-slate-900"
-          }`}
-        >
-          <Navigation className="w-3.5 h-3.5" />
-          Marine
-        </button>
-        <button
-          onClick={() => setActiveSubTab("consent")}
-          className={`flex items-center gap-1 px-3 py-1.5 rounded-lg font-semibold transition whitespace-nowrap ${
-            activeSubTab === "consent"
-              ? "bg-white dark:bg-slate-700 text-amber-600 dark:text-amber-300 shadow-xs"
-              : "text-slate-600 dark:text-slate-400 hover:text-slate-900"
-          }`}
-        >
-          <CheckSquare className="w-3.5 h-3.5" />
-          Consent Form
-        </button>
-        <button
-          onClick={() => setActiveSubTab("surgical_consent")}
-          className={`flex items-center gap-1 px-3 py-1.5 rounded-lg font-semibold transition whitespace-nowrap ${
-            activeSubTab === "surgical_consent"
-              ? "bg-white dark:bg-slate-700 text-rose-600 dark:text-rose-300 shadow-xs"
-              : "text-slate-600 dark:text-slate-400 hover:text-slate-900"
-          }`}
-        >
-          <ShieldAlert className="w-3.5 h-3.5" />
-          Surgical Consent
-        </button>
-        <button
-          onClick={() => setActiveSubTab("report")}
-          className={`flex items-center gap-1 px-3 py-1.5 rounded-lg font-semibold transition whitespace-nowrap ${
-            activeSubTab === "report"
-              ? "bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 shadow-xs"
-              : "text-slate-600 dark:text-slate-400 hover:text-slate-900"
-          }`}
-        >
-          <ListOrdered className="w-3.5 h-3.5" />
-          Certificate Report
-        </button>
-      </div>
-
-      {/* Main View: Issue Form or Report Table */}
-      {activeSubTab !== "report" ? (
+      {certMode !== "registry" ? (
         <Card>
-          <CardHeader>
-            <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-              <Award className="w-4 h-4 text-amber-500" />
-              Issue {activeSubTab.replace("_", " ").toUpperCase()} Document
-            </h2>
-            <p className="text-xs text-slate-500">
-              Fill in the patient clinical and statutory parameters to generate a signed and verified hospital certification document.
-            </p>
-          </CardHeader>
+          <CardHeader title={`Generate ${CERT_LABELS[certMode]}`} subtitle="Stored securely with QR verification stamp" />
           <CardBody>
-            <form onSubmit={handleIssueCertificate} className="space-y-4 max-w-3xl">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <Label>Patient Full Name *</Label>
-                  <Input
-                    required
-                    value={form.patientName}
-                    onChange={(e) => setForm({ ...form, patientName: e.target.value })}
-                    placeholder="e.g. Anand Sundaram"
-                  />
-                </div>
-                <div>
-                  <Label>Digital UHID (If Registered)</Label>
-                  <Input
-                    value={form.patientUhid}
-                    onChange={(e) => setForm({ ...form, patientUhid: e.target.value })}
-                    placeholder="e.g. CURA-2026-0042"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <Label>Age</Label>
-                  <Input
-                    type="number"
-                    value={form.patientAge}
-                    onChange={(e) => setForm({ ...form, patientAge: e.target.value })}
-                  />
-                </div>
+            <form onSubmit={handleIssueCertificate} className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div><Label>Patient Full Name *</Label><Input value={form.patientName} onChange={(e) => setForm({ ...form, patientName: e.target.value })} required /></div>
+              <div><Label>UHID</Label><Input value={form.patientUhid} onChange={(e) => setForm({ ...form, patientUhid: e.target.value })} placeholder="CURA-2026-..." /></div>
+              <div className="grid grid-cols-2 gap-2">
+                <div><Label>Age</Label><Input type="number" value={form.patientAge} onChange={(e) => setForm({ ...form, patientAge: e.target.value })} /></div>
                 <div>
                   <Label>Gender</Label>
-                  <Select
-                    value={form.patientGender}
-                    onChange={(e) => setForm({ ...form, patientGender: e.target.value as any })}
-                  >
-                    <option value="Male">Male</option>
-                    <option value="Female">Female</option>
-                    <option value="Other">Other</option>
-                  </Select>
-                </div>
-                <div>
-                  <Label>Certifying Physician</Label>
-                  <Select
-                    value={form.doctorName}
-                    onChange={(e) => setForm({ ...form, doctorName: e.target.value })}
-                  >
-                    {data.doctors.map((d) => (
-                      <option key={d.id} value={d.name}>
-                        {d.name} ({d.department || "Consultant"})
-                      </option>
-                    ))}
+                  <Select value={form.patientGender} onChange={(e) => setForm({ ...form, patientGender: e.target.value })}>
+                    <option value="Male">Male</option><option value="Female">Female</option><option value="Other">Other</option>
                   </Select>
                 </div>
               </div>
+              <div><Label>Certifying Physician</Label><Input value={form.doctorName} onChange={(e) => setForm({ ...form, doctorName: e.target.value })} /></div>
+              <div><Label>Issue Date</Label><Input type="date" value={form.issueDate} onChange={(e) => setForm({ ...form, issueDate: e.target.value })} /></div>
+              <div><Label>Valid Until (if applicable)</Label><Input type="date" value={form.validUntil} onChange={(e) => setForm({ ...form, validUntil: e.target.value })} /></div>
 
-              {/* Conditional Fields Based on Active Certificate Type */}
-              {activeSubTab === "medical" && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-xl bg-blue-50/60 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 text-xs">
-                  <div>
-                    <Label>Clinical Diagnosis / Ailment *</Label>
-                    <Input
-                      required
-                      value={form.diagnosis}
-                      onChange={(e) => setForm({ ...form, diagnosis: e.target.value })}
-                      placeholder="e.g. Acute Viral Gastroenteritis with Dehydration"
-                    />
-                  </div>
-                  <div>
-                    <Label>Recommended Medical Rest (Days)</Label>
-                    <Input
-                      type="number"
-                      value={form.restDays}
-                      onChange={(e) => setForm({ ...form, restDays: e.target.value })}
-                      placeholder="e.g. 5"
-                    />
-                  </div>
-                </div>
+              {certMode === "birth" && (
+                <>
+                  <div><Label>Mother's Name</Label><Input value={form.motherName} onChange={(e) => setForm({ ...form, motherName: e.target.value })} /></div>
+                  <div><Label>Father's Name</Label><Input value={form.fatherName} onChange={(e) => setForm({ ...form, fatherName: e.target.value })} /></div>
+                  <div><Label>Birth Weight (Kg)</Label><Input type="number" step="0.1" value={form.birthWeightKg} onChange={(e) => setForm({ ...form, birthWeightKg: e.target.value })} /></div>
+                </>
+              )}
+              {certMode === "vaccination" && (
+                <>
+                  <div><Label>Vaccine Administered</Label><Input value={form.vaccineName} onChange={(e) => setForm({ ...form, vaccineName: e.target.value })} /></div>
+                  <div><Label>Batch / Lot #</Label><Input value={form.doseLot} onChange={(e) => setForm({ ...form, doseLot: e.target.value })} /></div>
+                </>
+              )}
+              {certMode === "death" && (
+                <div className="md:col-span-2"><Label>Cause of Death (ICD-10)</Label><Input value={form.causeOfDeath} onChange={(e) => setForm({ ...form, causeOfDeath: e.target.value })} /></div>
+              )}
+              {(certMode === "consent" || certMode === "surgical_consent") && (
+                <div className="md:col-span-2"><Label>Authorized Procedure / Surgery</Label><Input value={form.procedureName} onChange={(e) => setForm({ ...form, procedureName: e.target.value })} /></div>
+              )}
+              {(certMode === "medical" || certMode === "fitness" || certMode === "marine") && (
+                <>
+                  <div className="md:col-span-2"><Label>Clinical Finding / Diagnosis</Label><Input value={form.diagnosis} onChange={(e) => setForm({ ...form, diagnosis: e.target.value })} /></div>
+                  <div><Label>Purpose</Label><Input value={form.purpose} onChange={(e) => setForm({ ...form, purpose: e.target.value })} /></div>
+                </>
+              )}
+              {certMode === "self_declaration" && (
+                <div className="md:col-span-3"><Label>Signed Declaration Statement</Label><Textarea value={form.declarationText} onChange={(e) => setForm({ ...form, declarationText: e.target.value })} /></div>
               )}
 
-              {activeSubTab === "birth" && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-xl bg-sky-50/60 dark:bg-sky-950/30 border border-sky-200 dark:border-sky-800 text-xs">
-                  <div>
-                    <Label>Mother & Father's Name</Label>
-                    <Input
-                      value={form.parentName}
-                      onChange={(e) => setForm({ ...form, parentName: e.target.value })}
-                      placeholder="e.g. Sunita & Rajesh"
-                    />
-                  </div>
-                  <div>
-                    <Label>Birth Weight (kg)</Label>
-                    <Input
-                      value={form.weight}
-                      onChange={(e) => setForm({ ...form, weight: e.target.value })}
-                      placeholder="e.g. 3.2"
-                    />
-                  </div>
-                </div>
-              )}
-
-              {activeSubTab === "fitness" && (
-                <div className="p-4 rounded-xl bg-purple-50/60 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 text-xs space-y-3">
-                  <div>
-                    <Label>Physical Fitness Purpose</Label>
-                    <Input
-                      value={form.purpose}
-                      onChange={(e) => setForm({ ...form, purpose: e.target.value })}
-                      placeholder="e.g. Fitness for Flight / Overseas Employment"
-                    />
-                  </div>
-                  <div>
-                    <Label>Clinical Fitness Remarks & Vital Readings</Label>
-                    <Input
-                      value={form.secondaryDetails}
-                      onChange={(e) => setForm({ ...form, secondaryDetails: e.target.value })}
-                      placeholder="e.g. BP: 120/80, Pulse: 72 bpm, Chest Clear, Visual Acuity 6/6"
-                    />
-                  </div>
-                </div>
-              )}
-
-              <div className="flex items-center justify-end gap-3 pt-3">
-                <Button type="submit" className="bg-amber-600 hover:bg-amber-700 text-white font-semibold">
-                  <Printer className="w-4 h-4 mr-1.5" />
-                  Issue Certificate & Open Print Preview
-                </Button>
+              <div className="md:col-span-3 flex justify-end pt-2">
+                <Button type="submit" variant="primary"><Plus className="w-4 h-4" /> Generate & Issue Certificate</Button>
               </div>
             </form>
           </CardBody>
         </Card>
-      ) : (
-        /* Certificate Report Table */
-        <Card>
-          <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                <ListOrdered className="w-4 h-4 text-amber-500" />
-                Certificate Register & Audit Log
-              </h2>
-              <p className="text-xs text-slate-500">Historical register of all legally issued hospital certifications.</p>
-            </div>
-            <div className="w-72">
-              <div className="relative">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                <Input
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search certificate # or patient..."
-                  className="pl-9 text-xs"
-                />
-              </div>
-            </div>
-          </CardHeader>
-          <CardBody className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="border-b border-slate-200 dark:border-slate-700 bg-slate-50/75 dark:bg-slate-800/50 text-[11px] uppercase tracking-wider text-slate-500">
-                    <th className="py-3 px-4">Cert #</th>
-                    <th className="py-3 px-4">Type</th>
-                    <th className="py-3 px-4">Patient / UHID</th>
-                    <th className="py-3 px-4">Certifying Doctor</th>
-                    <th className="py-3 px-4">Issue Date</th>
-                    <th className="py-3 px-4">Status</th>
-                    <th className="py-3 px-4 text-right">Actions</th>
+      ) : null}
+
+      {/* Certificates Registry */}
+      <Card>
+        <CardHeader
+          title={`Certificates Registry (${certs.length})`}
+          right={<Button size="sm" variant="secondary" onClick={() => downloadCSV("certificates_registry.csv", certs as any[])}><Download className="w-3.5 h-3.5" /> CSV</Button>}
+        />
+        <CardBody className="p-0 overflow-x-auto">
+          {certs.length === 0 ? (
+            <EmptyState icon="📜" title="No certificates issued yet" sub="Use the form above to generate an official hospital document." />
+          ) : (
+            <table className="w-full text-sm">
+              <thead><tr><Th>Cert #</Th><Th>Type</Th><Th>Patient</Th><Th>Doctor</Th><Th>Issue Date</Th><Th>Status</Th><Th className="text-right">Print</Th></tr></thead>
+              <tbody>
+                {certs.map((c) => (
+                  <tr key={c.id} className="border-t border-slate-100 dark:border-slate-800">
+                    <Td className="font-mono text-xs">{c.certificateNumber}</Td>
+                    <Td><Badge tone="blue">{c.certificateType}</Badge></Td>
+                    <Td className="font-semibold">{c.patientName}</Td>
+                    <Td>{c.doctorName}</Td>
+                    <Td>{c.issueDate}</Td>
+                    <Td><Badge tone="green">{c.status}</Badge></Td>
+                    <Td className="text-right">
+                      <Button size="sm" variant="secondary" onClick={() => setPreviewCert(c)}><Printer className="w-3.5 h-3.5" /> View</Button>
+                    </Td>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-700/60">
-                  {filteredCerts.map((cert) => (
-                    <tr key={cert.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-700/30 transition-colors">
-                      <td className="py-3 px-4 font-mono font-bold text-amber-600 dark:text-amber-400">
-                        {cert.certificateNumber}
-                      </td>
-                      <td className="py-3 px-4 uppercase font-semibold text-slate-700 dark:text-slate-200">
-                        {cert.certificateType}
-                      </td>
-                      <td className="py-3 px-4">
-                        <div className="font-semibold text-slate-800 dark:text-slate-100">{cert.patientName}</div>
-                        <div className="text-[11px] font-mono text-slate-400">{cert.patientUhid}</div>
-                      </td>
-                      <td className="py-3 px-4 text-slate-600 dark:text-slate-300">{cert.doctorName}</td>
-                      <td className="py-3 px-4 font-mono text-slate-500">{fmtDate(cert.issueDate)}</td>
-                      <td className="py-3 px-4">
-                        <Badge tone="green">Verified Issued</Badge>
-                      </td>
-                      <td className="py-3 px-4 text-right">
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          className="text-xs h-7 px-2"
-                          onClick={() => {
-                            setSelectedCertForPrint(cert);
-                            setPrintModalOpen(true);
-                          }}
-                        >
-                          <Printer className="w-3.5 h-3.5 mr-1" />
-                          Print
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </CardBody>
-        </Card>
-      )}
+                ))}
+              </tbody>
+            </table>
+          )}
+        </CardBody>
+      </Card>
 
-      {/* ── Official Printable Certificate Modal ── */}
-      <Modal
-        open={printModalOpen}
-        onClose={() => setPrintModalOpen(false)}
-        title="Official Hospital Certification Document"
-        size="lg"
-      >
-        {selectedCertForPrint && (
+      {/* Official Certificate Preview Modal */}
+      <Modal open={!!previewCert} onClose={() => setPreviewCert(null)} title={previewCert ? `${CERT_LABELS[previewCert.certificateType] || "Certificate"} — ${previewCert.certificateNumber}` : "Preview"}>
+        {previewCert && (
           <div className="space-y-4">
-            <div className="bg-white text-slate-900 p-8 rounded-xl border border-slate-300 shadow-sm font-serif print:border-none print:shadow-none">
-              {/* Header Letterhead */}
-              <div className="text-center border-b-2 border-slate-900 pb-4 mb-6">
-                <div className="text-2xl font-black uppercase tracking-wider text-slate-900">
-                  Cura Multispecialty Hospital
-                </div>
-                <div className="text-xs text-slate-600 font-sans mt-0.5">
-                  108 Healthcare Boulevard, Anna Nagar, Chennai - 600040 · Phone: +91 44 2800 9000
-                </div>
-                <div className="text-[10px] text-slate-500 font-mono tracking-widest mt-1 uppercase">
-                  NABH & ISO 9001:2026 ACCREDITED MEDICAL INSTITUTION
-                </div>
-              </div>
-
-              {/* Certificate Title Banner */}
-              <div className="text-center my-6">
-                <div className="inline-block border-2 border-slate-900 px-6 py-1.5 uppercase font-bold tracking-widest text-base bg-slate-50">
-                  {selectedCertForPrint.certificateType.replace("_", " ")} Certificate
-                </div>
-                <div className="text-xs font-mono font-bold text-slate-700 mt-2">
-                  Certificate Ref: {selectedCertForPrint.certificateNumber}
-                </div>
-              </div>
-
-              {/* Certificate Body Text */}
-              <div className="space-y-4 text-sm leading-relaxed text-slate-800 text-justify">
-                <p>
-                  This is to solemnly certify that{" "}
-                  <b className="text-slate-950 font-bold underline decoration-slate-400 underline-offset-4">
-                    {selectedCertForPrint.patientName}
-                  </b>
-                  , aged {selectedCertForPrint.patientAge || "30"} years, gender {selectedCertForPrint.patientGender || "Male"}, holding Digital Health UHID{" "}
-                  <span className="font-mono font-semibold">{selectedCertForPrint.patientUhid}</span>, was examined under our care at Cura Multispecialty Hospital.
-                </p>
-
-                {selectedCertForPrint.diagnosis && (
-                  <p>
-                    <b>Clinical Diagnosis / Findings:</b> {selectedCertForPrint.diagnosis}
-                  </p>
-                )}
-
-                {selectedCertForPrint.details?.restDaysRecommended && (
-                  <p>
-                    In our professional clinical judgment, the patient requires{" "}
-                    <b>{selectedCertForPrint.details.restDaysRecommended} days</b> of absolute medical rest from work/school duties commencing from{" "}
-                    {fmtDate(selectedCertForPrint.issueDate)}.
-                  </p>
-                )}
-
-                {selectedCertForPrint.details?.birthWeightKg && (
-                  <p>
-                    Live birth recorded with birth weight of <b>{selectedCertForPrint.details.birthWeightKg} kg</b> to parent(s){" "}
-                    <b>{selectedCertForPrint.details.parentName || "Parents on record"}</b>.
-                  </p>
-                )}
-
-                {selectedCertForPrint.details?.fitnessStatement && (
-                  <p>
-                    <b>Fitness Assessment:</b> {selectedCertForPrint.details.fitnessStatement}
-                  </p>
-                )}
-
-                <p className="text-xs text-slate-600 italic mt-6">
-                  This document is issued upon request for official statutory verification purposes without liability.
-                </p>
-              </div>
-
-              {/* Signatures & Hospital Stamp */}
-              <div className="mt-12 pt-6 border-t border-slate-300 flex items-end justify-between text-xs">
+            <div className="p-5 rounded-xl border-2 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 space-y-3">
+              <div className="flex items-center justify-between border-b pb-3">
                 <div>
-                  <div className="w-20 h-20 border border-dashed border-slate-400 rounded-lg flex items-center justify-center text-[10px] text-slate-400 font-mono">
-                    HOSPITAL SEAL
-                  </div>
-                  <div className="text-[10px] text-slate-500 font-mono mt-1">Date: {fmtDate(selectedCertForPrint.issueDate)}</div>
+                  <div className="text-base font-bold text-slate-900 dark:text-white">CURA TECH MULTI-SPECIALTY HOSPITAL</div>
+                  <div className="text-xs text-slate-500">Official Medical Records Department</div>
                 </div>
-
-                <div className="text-right">
-                  <div className="font-bold text-slate-900">{selectedCertForPrint.doctorName}</div>
-                  <div className="text-[11px] text-slate-600">Authorized Medical Practitioner</div>
-                  <div className="text-[10px] text-slate-500 font-mono">Reg. No: TNMC-2014-98124</div>
-                </div>
+                <QrCode className="w-8 h-8 text-slate-600" />
               </div>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <div><span className="text-slate-400">Certificate No:</span> <strong>{previewCert.certificateNumber}</strong></div>
+                <div><span className="text-slate-400">Issue Date:</span> <strong>{previewCert.issueDate}</strong></div>
+                <div><span className="text-slate-400">Patient Name:</span> <strong>{previewCert.patientName}</strong></div>
+                <div><span className="text-slate-400">UHID:</span> <strong>{previewCert.patientUhid || "N/A"}</strong></div>
+                <div><span className="text-slate-400">Physician:</span> <strong>{previewCert.doctorName}</strong></div>
+                <div><span className="text-slate-400">Purpose:</span> <strong>{previewCert.purpose || "Official"}</strong></div>
+              </div>
+              {previewCert.diagnosis && <div className="text-sm pt-2 border-t">Diagnosis / Note: <strong>{previewCert.diagnosis}</strong></div>}
+              {previewCert.details && Object.keys(previewCert.details).length > 0 && (
+                <div className="text-xs bg-slate-50 dark:bg-slate-800 p-3 rounded-lg space-y-1">
+                  {Object.entries(previewCert.details).map(([k, v]) => (
+                    <div key={k}><span className="capitalize font-semibold">{k}:</span> {String(v)}</div>
+                  ))}
+                </div>
+              )}
             </div>
-
-            <div className="flex items-center justify-end gap-3 pt-2">
-              <Button variant="secondary" onClick={() => setPrintModalOpen(false)}>
-                Close
-              </Button>
-              <Button onClick={() => window.print()} className="bg-amber-600 hover:bg-amber-700 text-white font-bold">
-                <Printer className="w-4 h-4 mr-1.5" />
-                Print Certificate
-              </Button>
+            <div className="flex justify-end gap-2">
+              <Button variant="secondary" onClick={() => setPreviewCert(null)}>Close</Button>
+              <Button variant="primary" onClick={() => window.print()}><Printer className="w-4 h-4" /> Print Certificate</Button>
             </div>
           </div>
         )}
@@ -696,5 +307,3 @@ export const CertificateERP: React.FC<{
     </div>
   );
 };
-
-export default CertificateERP;

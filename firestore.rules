@@ -31,9 +31,21 @@ service cloud.firestore {
     match /gp_grns/{doc}          { allow read: if true; allow write: if sane(); }
     match /gp_returns/{doc}       { allow read: if true; allow write: if sane(); }
     match /gp_appointments/{doc}  { allow read: if true; allow write: if sane(); }
+    match /gp_admissions/{doc}    { allow read: if true; allow write: if sane(); }
     match /gp_vitals/{doc}        { allow read: if true; allow write: if sane(); }
     match /gp_care_plans/{doc}    { allow read: if true; allow write: if sane(); }
     match /gp_consultations/{doc} { allow read: if true; allow write: if sane(); }
     match /gp_lab_orders/{doc}    { allow read: if true; allow write: if sane(); }
+    match /gp_certificates/{doc}  { allow read: if true; allow write: if sane(); }
+    match /gp_equipments/{doc}    { allow read: if true; allow write: if sane(); }
+    match /gp_accounts/{doc}      { allow read: if true; allow write: if sane(); }
+    match /gp_cashier/{doc}       { allow read: if true; allow write: if sane(); }
+    match /gp_physiotherapy/{doc} { allow read: if true; allow write: if sane(); }
+    match /gp_store/{doc}         { allow read: if true; allow write: if sane(); }
+    match /gp_ambulance/{doc}     { allow read: if true; allow write: if sane(); }
+    match /gp_skin/{doc}          { allow read: if true; allow write: if sane(); }
+    match /gp_maintenance/{doc}   { allow read: if true; allow write: if sane(); }
+    match /gp_admin/{doc}         { allow read: if true; allow write: if sane(); }
+    match /gp_lab/{doc}           { allow read: if true; allow write: if sane(); }
   }
 }

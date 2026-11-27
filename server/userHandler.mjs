@@ -42,6 +42,13 @@ export function validateUserPayload(payload = {}, isUpdate = false) {
       "admin_pharmacist",
       "pharmacist",
       "lab_tech",
+      "cashier",
+      "accountant",
+      "maintenance",
+      "physiotherapy",
+      "store_manager",
+      "ambulance",
+      "skin_specialist",
     ];
     if (!validRoles.includes(role)) {
       errors.push(`Invalid role '${role}'. Valid roles are: ${validRoles.join(", ")}`);

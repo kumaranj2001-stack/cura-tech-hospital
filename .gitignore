@@ -20,6 +20,9 @@ pnpm-debug.log*
 .env.test.local
 .env.production.local
 
+# Server runtime datastore
+server/.data/
+
 # Editor / OS files
 .DS_Store
 Thumbs.db
